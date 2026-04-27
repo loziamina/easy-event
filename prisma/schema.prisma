@@ -1,0 +1,449 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                Int       @id @default(autoincrement())
+  email             String    @unique
+  name              String?
+  avatarUrl         String?
+  phone             String?
+  address           String?
+  password          String
+  role              String    @default("CLIENT") // PLATFORM_ADMIN | ORGANIZER_OWNER | ORGANIZER_STAFF | CLIENT
+  organizerId       Int?
+  resetToken        String?   @unique
+  resetTokenExpires DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @default(now()) @updatedAt
+
+  organizer      Organizer?      @relation(fields: [organizerId], references: [id])
+  events         Event[]        @relation("UserEvents")
+  assignedEvents Event[]        @relation("AssignedStaffEvents")
+  authoredReviews Review[]      @relation("ReviewAuthor")
+  receivedStaffReviews Review[] @relation("ReviewedStaff")
+  messages       Message[]
+  auditLogs      AuditLog[]     @relation("AuditActor")
+  notifications  Notification[]
+  ticketsRequested Ticket[] @relation("TicketRequester")
+  ticketsAssigned  Ticket[] @relation("TicketAssignee")
+
+  conversationsAsClient Conversation[] @relation("ClientConversations")
+  conversationsAsAdmin  Conversation[] @relation("AdminConversations")
+}
+
+model Organizer {
+  id           Int      @id @default(autoincrement())
+  name         String
+  slug         String   @unique
+  status       String   @default("PENDING") // PENDING | APPROVED | SUSPENDED
+  city         String?
+  address      String?
+  serviceArea  String?
+  description  String?
+  coverImage   String?
+  portfolioImages String?
+  portfolioVideos String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+
+  users         User[]
+  products      Product[]
+  events        Event[]
+  reviews       Review[]
+  conversations Conversation[]
+  tickets       Ticket[]
+}
+
+model Product {
+  id             Int      @id @default(autoincrement())
+  name           String
+  description    String?
+  price          String
+  image          String?
+  gallery        String?
+  type           String   @default("PRODUCT") // PRODUCT | PACK
+  variants       String?
+  stock          Int?
+  isAvailable    Boolean  @default(true)
+  recommendedFor String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
+
+  organizerId Int?
+  organizer   Organizer? @relation(fields: [organizerId], references: [id])
+  categoryId Int?
+  category   Category? @relation(fields: [categoryId], references: [id])
+
+  eventItems EventItem[]
+  orderItems OrderItem[]
+}
+
+model Category {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  products Product[]
+}
+
+model EventTemplate {
+  id                  Int      @id @default(autoincrement())
+  name                String
+  occasionType        String
+  description         String?
+  theme               String?
+  guestCount          Int?
+  budget              Float?
+  suggestedTags       String?
+  suggestedProductIds String?
+  serviceBuffet       Boolean  @default(false)
+  serviceDeco         Boolean  @default(false)
+  serviceOrganisation Boolean  @default(false)
+  serviceGateaux      Boolean  @default(false)
+  serviceMobilier     Boolean  @default(false)
+  serviceAnimation    Boolean  @default(false)
+  serviceLieu         Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @default(now()) @updatedAt
+}
+
+model Event {
+  id   Int      @id @default(autoincrement())
+  name String
+  date DateTime
+
+  occasionType String?
+  theme        String?
+  location     String?
+  guestCount   Int?
+  budget       Float?
+  notes        String?
+
+  serviceBuffet       Boolean @default(false)
+  serviceDeco         Boolean @default(false)
+  serviceOrganisation Boolean @default(false)
+  serviceGateaux      Boolean @default(false)
+  serviceMobilier     Boolean @default(false)
+  serviceAnimation    Boolean @default(false)
+  serviceLieu         Boolean @default(false)
+
+  isSubmitted Boolean @default(false)
+
+  status      String  @default("DRAFT") // DRAFT | PENDING_APPROVAL | ACCEPTED | REFUSED | PLANNED | DONE
+  statusText  String?
+  statusColor String?
+
+  ownerId         Int
+  organizerId     Int?
+  owner           User  @relation(fields: [ownerId], references: [id], name: "UserEvents")
+  organizer       Organizer? @relation(fields: [organizerId], references: [id])
+  assignedStaffId Int?
+  assignedStaff   User? @relation("AssignedStaffEvents", fields: [assignedStaffId], references: [id])
+
+  items       EventItem[]
+  orders      Order[]
+  quotes      Quote[]
+  mockups     Mockup[]
+  attachments EventAttachment[]
+  history     EventHistory[]
+  checklist   EventChecklistItem[]
+  review      Review?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+model Review {
+  id                Int       @id @default(autoincrement())
+  eventId           Int       @unique
+  organizerId       Int
+  authorId          Int
+  reviewedStaffId   Int?
+  organizerRating   Int
+  organizerComment  String?
+  staffRating       Int?
+  staffComment      String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @default(now()) @updatedAt
+
+  event           Event      @relation(fields: [eventId], references: [id])
+  organizer       Organizer  @relation(fields: [organizerId], references: [id])
+  author          User       @relation("ReviewAuthor", fields: [authorId], references: [id])
+  reviewedStaff   User?      @relation("ReviewedStaff", fields: [reviewedStaffId], references: [id])
+}
+
+model PlanningBlock {
+  id        Int      @id @default(autoincrement())
+  title     String
+  startAt   DateTime
+  endAt     DateTime
+  reason    String?
+  eventId   Int?
+  createdBy Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+model EventChecklistItem {
+  id           Int       @id @default(autoincrement())
+  eventId      Int
+  event        Event     @relation(fields: [eventId], references: [id])
+  title        String
+  category     String?
+  dueAt        DateTime?
+  isDone       Boolean   @default(false)
+  assignedToId Int?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now()) @updatedAt
+}
+
+model EventAttachment {
+  id        Int      @id @default(autoincrement())
+  eventId   Int
+  event     Event    @relation(fields: [eventId], references: [id])
+  name      String
+  url       String
+  type      String?
+  createdAt DateTime @default(now())
+}
+
+model EventHistory {
+  id         Int      @id @default(autoincrement())
+  eventId    Int
+  event      Event    @relation(fields: [eventId], references: [id])
+  actorId    Int?
+  action     String
+  fromStatus String?
+  toStatus   String?
+  details    String?
+  createdAt  DateTime @default(now())
+}
+
+model EventItem {
+  id            Int       @id @default(autoincrement())
+  eventId       Int
+  productId     Int
+  quantity      Int       @default(1)
+  note          String?
+  variant       String?
+  reservedUntil DateTime?
+
+  event   Event   @relation(fields: [eventId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([eventId, productId])
+}
+
+model Order {
+  id              Int       @id @default(autoincrement())
+  eventId         Int
+  event           Event     @relation(fields: [eventId], references: [id])
+  clientId        Int
+  status          String    @default("PENDING") // PENDING | CONFIRMED | CANCELLED
+  deliveryAddress String?
+  deliverySlot    String?
+  clientNotes     String?
+  deliveryFee     Float     @default(0)
+  installationFee Float     @default(0)
+  subtotalFixed   Float     @default(0)
+  totalFixed      Float     @default(0)
+  hasQuoteItems   Boolean   @default(false)
+  reservedUntil   DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now()) @updatedAt
+
+  items OrderItem[]
+}
+
+model OrderItem {
+  id         Int      @id @default(autoincrement())
+  orderId    Int
+  order      Order    @relation(fields: [orderId], references: [id])
+  productId  Int?
+  product    Product? @relation(fields: [productId], references: [id])
+  name       String
+  priceLabel String
+  unitPrice  Float?
+  quantity   Int
+  note       String?
+  variant    String?
+  lineTotal  Float?
+  createdAt  DateTime @default(now())
+}
+
+model QuoteTemplate {
+  id              Int      @id @default(autoincrement())
+  name            String
+  description     String?
+  calculationMode String   @default("MIXED") // PER_GUEST | PACKAGE | MIXED
+  defaultDeposit  Float?
+  terms           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
+}
+
+model Quote {
+  id              Int       @id @default(autoincrement())
+  eventId         Int
+  event           Event     @relation(fields: [eventId], references: [id])
+  templateId      Int?
+  number          String
+  status          String    @default("DRAFT") // DRAFT | SENT | ACCEPTED | REFUSED
+  calculationMode String    @default("MIXED")
+  subtotal        Float     @default(0)
+  deliveryFee     Float     @default(0)
+  installationFee Float     @default(0)
+  discount        Float     @default(0)
+  total           Float     @default(0)
+  depositAmount   Float?
+  depositRequired Boolean   @default(false)
+  clientComment   String?
+  terms           String?
+  sentAt          DateTime?
+  decidedAt       DateTime?
+  createdBy       Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now()) @updatedAt
+
+  items QuoteItem[]
+}
+
+model QuoteItem {
+  id          Int      @id @default(autoincrement())
+  quoteId     Int
+  quote       Quote    @relation(fields: [quoteId], references: [id])
+  label       String
+  description String?
+  strategy    String   @default("FIXED") // FIXED | PER_GUEST | PACKAGE | QUOTE
+  unitPrice   Float?
+  quantity    Int      @default(1)
+  guestCount  Int?
+  lineTotal   Float?
+  createdAt   DateTime @default(now())
+}
+
+model Mockup {
+  id          Int       @id @default(autoincrement())
+  eventId     Int
+  event       Event     @relation(fields: [eventId], references: [id])
+  title       String
+  url         String
+  fileType    String    @default("image") // image | pdf | canva
+  version     Int       @default(1)
+  status      String    @default("PENDING") // PENDING | APPROVED | CHANGES_REQUESTED
+  description String?
+  moodboard   String?
+  createdBy   Int?
+  decidedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
+
+  comments MockupComment[]
+}
+
+model MockupComment {
+  id         Int      @id @default(autoincrement())
+  mockupId   Int
+  mockup     Mockup   @relation(fields: [mockupId], references: [id])
+  authorId   Int?
+  authorRole String?
+  text       String
+  createdAt  DateTime @default(now())
+}
+
+model Conversation {
+  id               Int       @id @default(autoincrement())
+  clientId         Int
+  adminId          Int
+  organizerId      Int?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @default(now()) @updatedAt
+  clientLastReadAt DateTime?
+  staffLastReadAt  DateTime?
+
+  client User @relation("ClientConversations", fields: [clientId], references: [id])
+  admin  User @relation("AdminConversations", fields: [adminId], references: [id])
+  organizer Organizer? @relation(fields: [organizerId], references: [id])
+
+  messages Message[]
+
+  @@unique([clientId, adminId])
+}
+
+model Message {
+  id             Int          @id @default(autoincrement())
+  conversationId Int
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+
+  sender         String
+  text           String
+  timestamp      String
+  authorId       Int?
+  author         User?     @relation(fields: [authorId], references: [id])
+  attachmentUrl  String?
+  attachmentName String?
+  attachmentType String?
+  linkType       String?
+  linkId         Int?
+  readAt         DateTime?
+
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  user      User?    @relation(fields: [userId], references: [id])
+  role      String?
+  type      String
+  title     String
+  body      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Ticket {
+  id              Int       @id @default(autoincrement())
+  organizerId     Int
+  organizer       Organizer @relation(fields: [organizerId], references: [id])
+  requesterId     Int
+  requester       User      @relation("TicketRequester", fields: [requesterId], references: [id])
+  assignedAdminId Int?
+  assignedAdmin   User?     @relation("TicketAssignee", fields: [assignedAdminId], references: [id])
+  title           String
+  description     String
+  status          String    @default("OPEN") // OPEN | IN_PROGRESS | RESOLVED | REFUSED
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now()) @updatedAt
+  resolvedAt      DateTime?
+}
+
+model QuickMessageTemplate {
+  id        Int      @id @default(autoincrement())
+  title     String
+  body      String
+  role      String   @default("PLATFORM_ADMIN")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  actorId   Int?
+  actor     User?    @relation("AuditActor", fields: [actorId], references: [id])
+  action    String
+  entity    String?
+  entityId  String?
+  details   String?
+  createdAt DateTime @default(now())
+}
