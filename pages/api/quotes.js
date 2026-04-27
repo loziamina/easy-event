@@ -4,6 +4,7 @@ import { prisma } from '../../lib/prisma';
 import { canManageOperations } from '../../lib/permissions';
 import { writeAudit } from '../../lib/audit';
 import { writeEventHistory } from '../../lib/events';
+import { notifyOrganizerUsers } from '../../lib/notifications';
 import {
   QUOTE_STATUS,
   buildQuoteLinesFromEvent,
@@ -180,6 +181,14 @@ export default async function handler(req, res) {
           entityId: quote.id,
         });
 
+        await notifyOrganizerUsers({
+          organizerId: quote.event.organizerId,
+          excludeUserId: uid,
+          type: 'QUOTE_CLIENT_COMMENT',
+          title: 'Commentaire client sur un devis',
+          body: `${quote.number} - ${trimmedComment}`,
+        });
+
         return res.status(200).json(updated);
       }
 
@@ -328,6 +337,16 @@ export default async function handler(req, res) {
         entity: 'Quote',
         entityId: quote.id,
       });
+
+      if (['accept', 'refuse'].includes(action)) {
+        await notifyOrganizerUsers({
+          organizerId: quote.event.organizerId,
+          excludeUserId: uid,
+          type: 'QUOTE_DECISION',
+          title: action === 'accept' ? 'Devis accepte' : 'Devis refuse',
+          body: `${quote.number} - ${quote.event.name}`,
+        });
+      }
 
       return res.status(200).json(updated);
     }

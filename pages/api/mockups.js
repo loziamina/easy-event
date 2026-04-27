@@ -4,6 +4,7 @@ import { prisma } from '../../lib/prisma';
 import { canManageOperations } from '../../lib/permissions';
 import { writeAudit } from '../../lib/audit';
 import { writeEventHistory } from '../../lib/events';
+import { notifyOrganizerUsers, notifyUser } from '../../lib/notifications';
 
 function parseList(value) {
   if (!value) return [];
@@ -93,6 +94,12 @@ export default async function handler(req, res) {
         details: { mockupId: mockup.id, version },
       });
       await writeAudit({ actorId: uid, action: 'MOCKUP_UPLOADED', entity: 'Mockup', entityId: mockup.id });
+      await notifyUser({
+        userId: mockup.event.ownerId,
+        type: 'MOCKUP_UPLOADED',
+        title: 'Nouvelle maquette disponible',
+        body: `${mockup.title} - version ${mockup.version}`,
+      });
 
       return res.status(201).json(mapMockup(mockup));
     }
@@ -125,6 +132,22 @@ export default async function handler(req, res) {
           action: 'MOCKUP_COMMENTED',
           details: { mockupId },
         });
+        if (isStaff) {
+          await notifyUser({
+            userId: mockup.event.ownerId,
+            type: 'MOCKUP_COMMENT',
+            title: 'Nouveau commentaire sur une maquette',
+            body: String(text),
+          });
+        } else {
+          await notifyOrganizerUsers({
+            organizerId: mockup.event.organizerId,
+            excludeUserId: uid,
+            type: 'MOCKUP_COMMENT',
+            title: 'Commentaire client sur une maquette',
+            body: String(text),
+          });
+        }
         return res.status(201).json(comment);
       }
 
@@ -150,6 +173,13 @@ export default async function handler(req, res) {
         details: { mockupId },
       });
       await writeAudit({ actorId: uid, action: status, entity: 'Mockup', entityId: mockupId });
+      await notifyOrganizerUsers({
+        organizerId: mockup.event.organizerId,
+        excludeUserId: uid,
+        type: 'MOCKUP_STATUS',
+        title: status === 'APPROVED' ? 'Maquette validee' : 'Modifications demandees',
+        body: `${updated.title} - ${updated.event?.owner?.name || updated.event?.owner?.email || 'Client'}`,
+      });
 
       return res.status(200).json(mapMockup(updated));
     }

@@ -3,6 +3,7 @@ import { authOptions } from './auth/[...nextauth]';
 import { prisma } from '../../lib/prisma';
 import { canManageOperations, isPlatformAdmin } from '../../lib/permissions';
 import { writeAudit } from '../../lib/audit';
+import { notifyOrganizerUsers, notifyUser } from '../../lib/notifications';
 import {
   EVENT_STATUS,
   canTransition,
@@ -238,6 +239,15 @@ export default async function handler(req, res) {
         details: { status: nextStatus },
       });
 
+      if (body.submit) {
+        await notifyOrganizerUsers({
+          organizerId: organizer.id,
+          type: 'EVENT_SUBMITTED',
+          title: 'Nouvelle demande evenement',
+          body: `${created.name} - ${created.owner?.name || created.owner?.email || 'Client'}`,
+        });
+      }
+
       return res.status(201).json(created);
     }
 
@@ -312,6 +322,13 @@ export default async function handler(req, res) {
         entity: 'Event',
         entityId: updated.id,
         details: { status: updated.status },
+      });
+
+      await notifyOrganizerUsers({
+        organizerId: organizer.id,
+        type: 'EVENT_UPDATED',
+        title: 'Demande evenement modifiee',
+        body: updated.name,
       });
 
       return res.status(200).json(updated);
@@ -404,6 +421,13 @@ export default async function handler(req, res) {
         entity: 'Event',
         entityId: updated.id,
         details: { status },
+      });
+
+      await notifyUser({
+        userId: updated.ownerId,
+        type: 'EVENT_STATUS_UPDATED',
+        title: 'Statut de ton evenement mis a jour',
+        body: `${updated.name} - ${updated.statusText || updated.status}`,
       });
 
       return res.status(200).json(updated);

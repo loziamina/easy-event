@@ -2,6 +2,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from './auth/[...nextauth]';
 import { prisma } from '../../lib/prisma';
 import { writeAudit } from '../../lib/audit';
+import { notifyOrganizerUsers } from '../../lib/notifications';
 
 function clampRating(value) {
   const number = Number(value);
@@ -166,6 +167,13 @@ export default async function handler(req, res) {
         organizerId: event.organizerId,
         reviewedStaffId: event.assignedStaffId || null,
       },
+    });
+
+    await notifyOrganizerUsers({
+      organizerId: event.organizerId,
+      type: event.review ? 'REVIEW_UPDATED' : 'REVIEW_CREATED',
+      title: event.review ? 'Avis client modifie' : 'Nouvel avis client',
+      body: `${event.name} - ${review.organizerRating}/5`,
     });
 
     return res.status(event.review ? 200 : 201).json({ review: mapReview(review) });
