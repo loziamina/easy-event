@@ -27,6 +27,10 @@ export default function SignInPage() {
     }
   }
 
+  function handleGoogleSignIn() {
+    signIn('google', { callbackUrl: '/' });
+  }
+
   return (
     <div className="auth-shell flex items-center justify-center px-4 py-10">
       <div className="auth-slideshow">
@@ -75,6 +79,21 @@ export default function SignInPage() {
 
           <button className="w-full py-3.5 rounded-2xl font-semibold text-white" style={{ background: 'var(--gradient-primary)', boxShadow: 'var(--shadow-md)' }}>
             Se connecter
+          </button>
+
+          <div className="my-4 flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+            <span className="h-px flex-1 bg-slate-200" />
+            ou
+            <span className="h-px flex-1 bg-slate-200" />
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGoogleSignIn}
+            className="flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+          >
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-base font-bold text-blue-600">G</span>
+            Continuer avec Google
           </button>
 
           <div className="mt-4 text-sm text-center">
