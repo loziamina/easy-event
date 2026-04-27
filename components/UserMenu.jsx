@@ -5,6 +5,37 @@ import useSWR from 'swr';
 
 const fetcher = (url) => fetch(url).then((res) => res.json());
 
+function viewForNotification(notification) {
+  const linkType = String(notification?.linkType || '').toLowerCase();
+  const type = String(notification?.type || '').toUpperCase();
+
+  if (['quote', 'devis'].includes(linkType) || type.startsWith('QUOTE')) return 'quotes';
+  if (['mockup', 'maquette'].includes(linkType) || type.startsWith('MOCKUP')) return 'mockups';
+  if (['ticket', 'issue'].includes(linkType) || type.includes('TICKET') || type.includes('SUPPORT')) return 'tickets';
+  if (['chat', 'conversation', 'team-chat'].includes(linkType) || type.includes('MESSAGE')) return 'chat';
+  if (['organizer', 'organisateur'].includes(linkType) || type.includes('ORGANIZER')) return 'organizers';
+  if (['event', 'review', 'avis'].includes(linkType) || type.startsWith('EVENT') || type.startsWith('REVIEW')) return 'events';
+  return 'dashboard';
+}
+
+function targetForNotification(notification) {
+  const linkType = String(notification?.linkType || '').toLowerCase();
+  const type = String(notification?.type || '').toUpperCase();
+  let targetType = linkType;
+
+  if (!targetType && type.startsWith('QUOTE')) targetType = 'quote';
+  if (!targetType && type.startsWith('MOCKUP')) targetType = 'mockup';
+  if (!targetType && type.startsWith('EVENT')) targetType = 'event';
+  if (!targetType && type.startsWith('REVIEW')) targetType = 'event';
+  if (!targetType && type.includes('TICKET')) targetType = 'ticket';
+  if (!targetType && type.includes('MESSAGE')) targetType = 'chat';
+
+  return {
+    type: targetType || notification?.type || null,
+    id: notification?.linkId || null,
+  };
+}
+
 function initials(name, email) {
   const base = (name || email || 'U').trim();
   const parts = base.split(/\s+/).slice(0, 2);
@@ -78,6 +109,27 @@ export default function UserMenu() {
   async function markNotificationsRead() {
     await fetch('/api/notifications', { method: 'PATCH' });
     mutateNotifications();
+  }
+
+  async function openNotification(notification) {
+    await fetch('/api/notifications', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: notification.id }),
+    });
+
+    const view = viewForNotification(notification);
+    setNotificationsOpen(false);
+    mutateNotifications();
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('easy-event:navigate', {
+        detail: {
+          view,
+          target: targetForNotification(notification),
+        },
+      }));
+    }
   }
 
   return (
@@ -158,11 +210,19 @@ export default function UserMenu() {
 
           <div className="mt-2 max-h-96 space-y-2 overflow-y-auto">
             {notifications.map((notification) => (
-              <div key={notification.id} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-3 text-sm">
+              <button
+                key={notification.id}
+                type="button"
+                onClick={() => openNotification(notification)}
+                className="block w-full rounded-xl border border-slate-100 bg-slate-50 px-3 py-3 text-left text-sm transition hover:border-indigo-200 hover:bg-indigo-50"
+              >
                 <p className="font-semibold text-slate-900">{notification.title}</p>
                 {notification.body ? <p className="mt-1 text-slate-600">{notification.body}</p> : null}
-                <p className="mt-2 text-xs text-slate-400">{new Date(notification.createdAt).toLocaleString('fr-FR')}</p>
-              </div>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <p className="text-xs text-slate-400">{new Date(notification.createdAt).toLocaleString('fr-FR')}</p>
+                  <span className="text-xs font-semibold text-indigo-700">Ouvrir</span>
+                </div>
+              </button>
             ))}
             {notifications.length === 0 ? (
               <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">

@@ -383,7 +383,7 @@ function QuotePreview({ quote, isStaff, onSend, onDelete, onDecision, onComment 
   );
 }
 
-export default function Quotes() {
+export default function Quotes({ navTarget }) {
   const { data: session } = useSession();
   const isStaff = ['PLATFORM_ADMIN', 'ORGANIZER_OWNER', 'ORGANIZER_STAFF'].includes(session?.user?.role);
   const { data, mutate } = useSWR('/api/quotes', fetcher);
@@ -404,6 +404,12 @@ export default function Quotes() {
   const [templateForm, setTemplateForm] = useState(emptyTemplate);
   const [quoteForm, setQuoteForm] = useState(emptyQuoteForm);
   const { success, error, info } = useToast();
+
+  useEffect(() => {
+    if (navTarget?.type !== 'quote' || !navTarget?.id || quotes.length === 0) return;
+    const element = document.getElementById(`quote-${navTarget.id}`);
+    element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [navTarget, quotes.length]);
 
   function updateTemplate(field, value) {
     setTemplateForm((current) => ({ ...current, [field]: value }));
@@ -587,15 +593,20 @@ export default function Quotes() {
 
       <div className="space-y-4">
         {quotes.map((quote) => (
-          <QuotePreview
+          <div
             key={quote.id}
-            quote={quote}
-            isStaff={isStaff}
-            onSend={(id) => quoteAction(id, 'send')}
-            onDelete={deleteQuote}
-            onDecision={quoteAction}
-            onComment={quoteCommentAction}
-          />
+            id={`quote-${quote.id}`}
+            className={String(navTarget?.type) === 'quote' && String(navTarget?.id) === String(quote.id) ? 'rounded-[1.5rem] ring-2 ring-indigo-300 ring-offset-2' : ''}
+          >
+            <QuotePreview
+              quote={quote}
+              isStaff={isStaff}
+              onSend={(id) => quoteAction(id, 'send')}
+              onDelete={deleteQuote}
+              onDecision={quoteAction}
+              onComment={quoteCommentAction}
+            />
+          </div>
         ))}
         {quotes.length === 0 ? (
           <div className="page-section p-6 text-slate-500">Aucun devis.</div>

@@ -168,7 +168,7 @@ function MockupCard({ mockup, isStaff, onAction, onDelete }) {
   );
 }
 
-export default function Mockups() {
+export default function Mockups({ navTarget }) {
   const { data: session } = useSession();
   const isStaff = ['PLATFORM_ADMIN', 'ORGANIZER_OWNER', 'ORGANIZER_STAFF'].includes(session?.user?.role);
   const { data, mutate } = useSWR('/api/mockups', fetcher);
@@ -184,6 +184,12 @@ export default function Mockups() {
 
   const [form, setForm] = useState(emptyForm);
   const { success, error, info } = useToast();
+
+  useEffect(() => {
+    if (navTarget?.type !== 'mockup' || !navTarget?.id || mockups.length === 0) return;
+    const element = document.getElementById(`mockup-${navTarget.id}`);
+    element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [navTarget, mockups.length]);
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -284,13 +290,18 @@ export default function Mockups() {
 
       <div className="space-y-4">
         {mockups.map((mockup) => (
-          <MockupCard
+          <div
             key={mockup.id}
-            mockup={mockup}
-            isStaff={isStaff}
-            onAction={mockupAction}
-            onDelete={deleteMockup}
-          />
+            id={`mockup-${mockup.id}`}
+            className={String(navTarget?.type) === 'mockup' && String(navTarget?.id) === String(mockup.id) ? 'rounded-2xl ring-2 ring-indigo-300 ring-offset-2' : ''}
+          >
+            <MockupCard
+              mockup={mockup}
+              isStaff={isStaff}
+              onAction={mockupAction}
+              onDelete={deleteMockup}
+            />
+          </div>
         ))}
         {mockups.length === 0 ? (
           <div className="page-section p-6 text-slate-500">Aucune maquette.</div>

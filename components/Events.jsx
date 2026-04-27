@@ -649,9 +649,9 @@ function ClientActionPanel({ event, onEdit, onDelete, onOpenChat, onOpenCart }) 
   );
 }
 
-function EventCard({ event, isStaff, fetchEvents, onStartEditing, onDelete, onStatusUpdate, onOpenChat, onOpenCart, sessionUserId }) {
+function EventCard({ event, isStaff, fetchEvents, onStartEditing, onDelete, onStatusUpdate, onOpenChat, onOpenCart, sessionUserId, highlighted }) {
   return (
-    <article className="surface-card rounded-[1.6rem] p-6">
+    <article id={`event-${event.id}`} className={`surface-card rounded-[1.6rem] p-6 ${highlighted ? 'ring-2 ring-indigo-300 ring-offset-2' : ''}`}>
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">
@@ -969,7 +969,7 @@ function ClientReservationSection({
   );
 }
 
-function StaffEventSection({ events, fetchEvents, onStatusUpdate, onOpenChat, statusFilter, onStatusFilterChange }) {
+function StaffEventSection({ events, fetchEvents, onStatusUpdate, onOpenChat, statusFilter, onStatusFilterChange, navTarget }) {
   const pending = events.filter((event) => event.status === 'PENDING_APPROVAL').length;
   const accepted = events.filter((event) => event.status === 'ACCEPTED').length;
   const planned = events.filter((event) => event.status === 'PLANNED').length;
@@ -1034,6 +1034,7 @@ function StaffEventSection({ events, fetchEvents, onStatusUpdate, onOpenChat, st
             fetchEvents={fetchEvents}
             onStatusUpdate={onStatusUpdate}
             onOpenChat={onOpenChat}
+            highlighted={String(navTarget?.type) === 'event' && String(navTarget?.id) === String(event.id)}
           />
         ))}
 
@@ -1045,7 +1046,7 @@ function StaffEventSection({ events, fetchEvents, onStatusUpdate, onOpenChat, st
   );
 }
 
-export default function Events() {
+export default function Events({ navTarget }) {
   const { data: session, status } = useSession();
   const role = session?.user?.role;
   const isStaff = ['PLATFORM_ADMIN', 'ORGANIZER_OWNER', 'ORGANIZER_STAFF'].includes(role);
@@ -1078,6 +1079,12 @@ export default function Events() {
   useEffect(() => {
     fetchEvents();
   }, [status]);
+
+  useEffect(() => {
+    if (navTarget?.type !== 'event' || !navTarget?.id || events.length === 0) return;
+    const element = document.getElementById(`event-${navTarget.id}`);
+    element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [navTarget, events.length]);
 
   useEffect(() => {
     if (!isStaff || typeof window === 'undefined') return;
@@ -1306,6 +1313,7 @@ export default function Events() {
           onOpenChat={openChatModal}
           statusFilter={staffStatusFilter}
           onStatusFilterChange={updateStaffStatusFilter}
+          navTarget={navTarget}
         />
 
         <Modal isOpen={chatModalIsOpen} onRequestClose={closeChatModal} style={customStyles} contentLabel="Chat">
@@ -1430,6 +1438,7 @@ export default function Events() {
             onOpenChat={openChatModal}
             onOpenCart={openCart}
             sessionUserId={session.user.id}
+            highlighted={String(navTarget?.type) === 'event' && String(navTarget?.id) === String(event.id)}
           />
         ))}
 

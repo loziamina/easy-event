@@ -239,6 +239,8 @@ export default async function handler(req, res) {
           type: 'EVENT_SUBMITTED',
           title: 'Nouvelle demande evenement',
           body: `${created.name} - ${created.owner?.name || created.owner?.email || 'Client'}`,
+          linkType: 'event',
+          linkId: created.id,
         });
       }
 
@@ -323,6 +325,8 @@ export default async function handler(req, res) {
         type: 'EVENT_UPDATED',
         title: 'Demande evenement modifiee',
         body: updated.name,
+        linkType: 'event',
+        linkId: updated.id,
       });
 
       return res.status(200).json(updated);
@@ -422,6 +426,8 @@ export default async function handler(req, res) {
         type: 'EVENT_STATUS_UPDATED',
         title: 'Statut de ton evenement mis a jour',
         body: `${updated.name} - ${updated.statusText || updated.status}`,
+        linkType: 'event',
+        linkId: updated.id,
       });
 
       return res.status(200).json(updated);

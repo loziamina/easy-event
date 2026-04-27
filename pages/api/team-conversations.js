@@ -190,6 +190,8 @@ export default async function handler(req, res) {
           type: 'TEAM_MESSAGE',
           title: 'Nouveau message equipe',
           body: String(text).slice(0, 180),
+          linkType: 'team-chat',
+          linkId: conv.id,
         },
       });
 

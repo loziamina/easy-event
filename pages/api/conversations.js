@@ -486,6 +486,8 @@ export default async function handler(req, res) {
             type: 'MESSAGE',
             title: 'Nouveau message de la plateforme',
             body: String(text).slice(0, 180),
+            linkType: 'chat',
+            linkId: conv.id,
           },
         });
       } else if (supportMode) {
@@ -495,6 +497,8 @@ export default async function handler(req, res) {
             type: 'SUPPORT',
             title: 'Nouveau ticket organisateur',
             body: String(text).slice(0, 180),
+            linkType: 'chat',
+            linkId: conv.id,
           },
         });
       } else if (isStaff) {
@@ -504,6 +508,8 @@ export default async function handler(req, res) {
             type: 'MESSAGE',
             title: linkType ? `Nouveau ${String(linkType).toLowerCase()} dans le chat` : 'Nouveau message',
             body: String(text).slice(0, 180),
+            linkType: 'chat',
+            linkId: conv.id,
           },
         });
       } else {
@@ -513,6 +519,8 @@ export default async function handler(req, res) {
             type: 'MESSAGE',
             title: 'Nouveau message client',
             body: String(text).slice(0, 180),
+            linkType: 'chat',
+            linkId: conv.id,
           },
         });
       }

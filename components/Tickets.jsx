@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import useSWR from 'swr';
 import { useToast } from './ToastProvider';
@@ -23,7 +23,7 @@ function SummaryCard({ label, value, helper }) {
   );
 }
 
-export default function Tickets() {
+export default function Tickets({ navTarget }) {
   const { data: session } = useSession();
   const role = session?.user?.role;
   const isPlatformAdmin = role === 'PLATFORM_ADMIN';
@@ -42,6 +42,12 @@ export default function Tickets() {
   const { data, mutate, isLoading } = useSWR(isPlatformAdmin || isOrganizerUser ? query : null, fetcher);
   const tickets = data?.tickets || [];
   const summary = data?.summary || { total: 0, open: 0, inProgress: 0, resolved: 0, refused: 0 };
+
+  useEffect(() => {
+    if (navTarget?.type !== 'ticket' || !navTarget?.id || tickets.length === 0) return;
+    const element = document.getElementById(`ticket-${navTarget.id}`);
+    element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [navTarget, tickets.length]);
 
   async function createTicket(e) {
     e.preventDefault();
@@ -153,7 +159,11 @@ export default function Tickets() {
 
       <div className="space-y-4">
         {tickets.map((ticket) => (
-          <article key={ticket.id} className="bg-white border rounded-xl p-5 shadow-sm">
+          <article
+            key={ticket.id}
+            id={`ticket-${ticket.id}`}
+            className={`bg-white border rounded-xl p-5 shadow-sm ${String(navTarget?.type) === 'ticket' && String(navTarget?.id) === String(ticket.id) ? 'ring-2 ring-indigo-300 ring-offset-2' : ''}`}
+          >
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center gap-3">

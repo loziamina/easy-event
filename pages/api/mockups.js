@@ -100,6 +100,8 @@ export default async function handler(req, res) {
         type: 'MOCKUP_UPLOADED',
         title: 'Nouvelle maquette disponible',
         body: `${mockup.title} - version ${mockup.version}`,
+        linkType: 'mockup',
+        linkId: mockup.id,
       });
 
       return res.status(201).json(mapMockup(mockup));
@@ -139,6 +141,8 @@ export default async function handler(req, res) {
             type: 'MOCKUP_COMMENT',
             title: 'Nouveau commentaire sur une maquette',
             body: String(text),
+            linkType: 'mockup',
+            linkId: mockup.id,
           });
         } else {
           await notifyOrganizerUsers({
@@ -147,6 +151,8 @@ export default async function handler(req, res) {
             type: 'MOCKUP_COMMENT',
             title: 'Commentaire client sur une maquette',
             body: String(text),
+            linkType: 'mockup',
+            linkId: mockup.id,
           });
         }
         return res.status(201).json(comment);
@@ -180,6 +186,8 @@ export default async function handler(req, res) {
         type: 'MOCKUP_STATUS',
         title: status === 'APPROVED' ? 'Maquette validee' : 'Modifications demandees',
         body: `${updated.title} - ${updated.event?.owner?.name || updated.event?.owner?.email || 'Client'}`,
+        linkType: 'mockup',
+        linkId: updated.id,
       });
 
       return res.status(200).json(mapMockup(updated));

@@ -409,6 +409,8 @@ model Notification {
   type      String
   title     String
   body      String?
+  linkType  String?
+  linkId    Int?
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
 }

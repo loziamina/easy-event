@@ -35,7 +35,7 @@ function quoteScopeForUser(user, isStaff, uid) {
   return scope ? { event: scope } : {};
 }
 
-async function notifyUser(userId, type, title, body) {
+async function notifyUser(userId, type, title, body, linkType, linkId) {
   if (!userId) return;
   await prisma.notification.create({
     data: {
@@ -43,6 +43,8 @@ async function notifyUser(userId, type, title, body) {
       type,
       title,
       body,
+      linkType: linkType || null,
+      linkId: linkId ? Number(linkId) : null,
     },
   });
 }
@@ -190,6 +192,8 @@ export default async function handler(req, res) {
           type: 'QUOTE_CLIENT_COMMENT',
           title: 'Commentaire client sur un devis',
           body: `${quote.number} - ${trimmedComment}`,
+          linkType: 'quote',
+          linkId: quote.id,
         });
 
         return res.status(200).json(updated);
@@ -233,7 +237,9 @@ export default async function handler(req, res) {
           quote.event.ownerId,
           'QUOTE_COMMENT_REPLY',
           'Reponse a ton commentaire',
-          `Une reponse a ete ajoutee sur le devis ${quote.number}.`
+          `Une reponse a ete ajoutee sur le devis ${quote.number}.`,
+          'quote',
+          quote.id
         );
 
         return res.status(200).json(updated);
@@ -300,7 +306,9 @@ export default async function handler(req, res) {
           quote.event.ownerId,
           'QUOTE_UPDATED',
           'Devis modifie',
-          `Le devis ${quote.number} a ete modifie. Nouveau total: ${Number(total || 0).toLocaleString('fr-FR')} EUR.`
+          `Le devis ${quote.number} a ete modifie. Nouveau total: ${Number(total || 0).toLocaleString('fr-FR')} EUR.`,
+          'quote',
+          quote.id
         );
 
         return res.status(200).json(updated);
@@ -348,6 +356,8 @@ export default async function handler(req, res) {
           type: 'QUOTE_DECISION',
           title: action === 'accept' ? 'Devis accepte' : 'Devis refuse',
           body: `${quote.number} - ${quote.event.name}`,
+          linkType: 'quote',
+          linkId: quote.id,
         });
       }
 

@@ -242,6 +242,8 @@ export default async function handler(req, res) {
       type: event.review ? 'REVIEW_UPDATED' : 'REVIEW_CREATED',
       title: event.review ? 'Avis client modifie' : 'Nouvel avis client',
       body: `${event.name} - ${review.organizerRating}/5`,
+      linkType: 'event',
+      linkId: event.id,
     });
 
     return res.status(event.review ? 200 : 201).json({ review: mapReview(review) });

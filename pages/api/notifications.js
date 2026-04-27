@@ -60,6 +60,21 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'PATCH') {
+      const notificationId = Number(req.body?.id);
+      if (notificationId) {
+        await prisma.notification.updateMany({
+          where: {
+            id: notificationId,
+            OR: [
+              { userId: uid },
+              ...(isStaff ? [{ role: session.user.role }] : []),
+            ],
+          },
+          data: { isRead: true },
+        });
+        return res.status(200).json({ ok: true });
+      }
+
       await prisma.notification.updateMany({
         where: {
           isRead: false,

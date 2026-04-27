@@ -21,6 +21,7 @@ import { canManageOrganizerWorkspace } from '../lib/permissions';
 
 export default function Home() {
   const [view, setView] = useState('dashboard');
+  const [navTarget, setNavTarget] = useState(null);
   const { data: session, status } = useSession();
   const router = useRouter();
   const role = session?.user?.role;
@@ -31,7 +32,9 @@ export default function Home() {
   useEffect(() => {
     function handleNavigate(event) {
       const nextView = event.detail?.view;
+      const nextTarget = event.detail?.target || null;
       if (nextView) setView(nextView);
+      setNavTarget(nextTarget);
     }
 
     if (typeof window !== 'undefined') {
@@ -75,12 +78,12 @@ export default function Home() {
           <div className="app-main flex-1 overflow-y-auto p-4 md:p-8">
             {view === 'dashboard' && <Dashboard onSelectOrganizer={handleSelectOrganizer} />}
             {view === 'catalogue' && canUseOrganizerWorkspace && <Catalogue />}
-            {view === 'events' && role !== 'PLATFORM_ADMIN' && <Events />}
-            {view === 'quotes' && role !== 'PLATFORM_ADMIN' && <Quotes />}
-            {view === 'mockups' && role !== 'PLATFORM_ADMIN' && <Mockups />}
+            {view === 'events' && role !== 'PLATFORM_ADMIN' && <Events navTarget={navTarget} />}
+            {view === 'quotes' && role !== 'PLATFORM_ADMIN' && <Quotes navTarget={navTarget} />}
+            {view === 'mockups' && role !== 'PLATFORM_ADMIN' && <Mockups navTarget={navTarget} />}
             {view === 'planning' && canUseOrganizerWorkspace && <Planning />}
             {view === 'organizers' && canManageOrganizers && <OrganizerManagement />}
-            {view === 'tickets' && (role === 'PLATFORM_ADMIN' || canUseOrganizerWorkspace) && <Tickets />}
+            {view === 'tickets' && (role === 'PLATFORM_ADMIN' || canUseOrganizerWorkspace) && <Tickets navTarget={navTarget} />}
             {view === 'profile' && <Profile />}
             {view === 'staff' && canManageStaff && <StaffManagement />}
             {view === 'audit' && ['PLATFORM_ADMIN', 'ORGANIZER_OWNER', 'ORGANIZER_STAFF'].includes(role) && <AuditLog />}

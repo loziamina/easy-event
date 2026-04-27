@@ -122,6 +122,8 @@ export default async function handler(req, res) {
           type: 'TICKET',
           title: 'Nouveau ticket organisateur',
           body: `${ticket.organizer.name} - ${ticket.title}`.slice(0, 180),
+          linkType: 'ticket',
+          linkId: ticket.id,
         },
       });
 
@@ -167,6 +169,8 @@ export default async function handler(req, res) {
           type: 'TICKET',
           title: `Ticket ${status.toLowerCase()}`,
           body: `${ticket.title}`.slice(0, 180),
+          linkType: 'ticket',
+          linkId: ticket.id,
         },
       });
 
