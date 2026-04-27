@@ -308,6 +308,7 @@ model Quote {
   depositAmount   Float?
   depositRequired Boolean   @default(false)
   clientComment   String?
+  organizerComment String?
   terms           String?
   sentAt          DateTime?
   decidedAt       DateTime?

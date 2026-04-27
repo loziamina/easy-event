@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import Modal from 'react-modal';
 import Chat from './Chat';
@@ -322,6 +322,8 @@ function EventReviewCard({ event, onSaved }) {
 }
 
 function StaffActionPanel({ event, onStatusUpdate, onOpenChat }) {
+  const canContactClient = Boolean(event.ownerId) && !['REFUSED', 'DONE'].includes(event.status);
+
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
       {(staffTransitions[event.status] || []).map(([nextStatus, label]) => (
@@ -334,7 +336,7 @@ function StaffActionPanel({ event, onStatusUpdate, onOpenChat }) {
         </button>
       ))}
 
-      {event.status === 'ACCEPTED' && (
+      {canContactClient && (
         <button
           onClick={() => onOpenChat(event.ownerId, event)}
           className="rounded-xl bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 border border-indigo-200 hover:bg-indigo-100"
@@ -712,6 +714,7 @@ export default function Events() {
   const [selectedClientId, setSelectedClientId] = useState(null);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [selectedCartEventId, setSelectedCartEventId] = useState(null);
+  const cartSectionRef = useRef(null);
 
   async function fetchEvents() {
     if (status !== 'authenticated') return;
@@ -793,7 +796,7 @@ export default function Events() {
     setEvents([created, ...events]);
     setNewEvent(initialEventState);
     setSelectedTemplateId('');
-    if (submit) setSelectedCartEventId(created.id);
+    openCart(created.id);
     success(submit ? 'Evenement soumis' : 'Brouillon enregistre');
   }
 
@@ -880,6 +883,18 @@ export default function Events() {
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  function openCart(eventId) {
+    if (!eventId) {
+      setSelectedCartEventId(null);
+      return;
+    }
+
+    setSelectedCartEventId(eventId);
+    setTimeout(() => {
+      cartSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+  }
+
   function applyTemplate(templateId) {
     const template = eventTemplates.find((item) => String(item.id) === String(templateId));
     if (!template) return;
@@ -908,6 +923,7 @@ export default function Events() {
     [events]
   );
   const nextClientEvent = events.find((event) => ['DRAFT', 'PENDING_APPROVAL', 'ACCEPTED', 'PLANNED'].includes(event.status));
+  const selectedCartEvent = clientBookingEvents.find((event) => String(event.id) === String(selectedCartEventId));
 
   if (status === 'loading') {
     return <div className="p-8 text-center text-slate-500">Chargement...</div>;
@@ -974,7 +990,7 @@ export default function Events() {
       </div>
 
       <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="surface-card rounded-[1.6rem] p-6">
+        <div ref={cartSectionRef} className="surface-card rounded-[1.6rem] p-6">
           <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
               <h3 className="text-xl font-bold text-slate-900">Panier et reservation</h3>
@@ -988,7 +1004,7 @@ export default function Events() {
           <div className="mt-4">
             <select
               value={selectedCartEventId || ''}
-              onChange={(e) => setSelectedCartEventId(Number(e.target.value))}
+              onChange={(e) => openCart(e.target.value ? Number(e.target.value) : null)}
               className="app-select w-full rounded-2xl px-4 py-3 md:max-w-[460px]"
             >
               <option value="">Selectionner un evenement</option>
@@ -1001,7 +1017,7 @@ export default function Events() {
           </div>
 
           <div className="mt-5">
-            <EventCart eventId={selectedCartEventId} />
+            <EventCart eventId={selectedCartEventId} event={selectedCartEvent} />
           </div>
         </div>
 
@@ -1042,7 +1058,7 @@ export default function Events() {
             onStartEditing={startEditing}
             onDelete={handleDelete}
             onOpenChat={openChatModal}
-            onOpenCart={setSelectedCartEventId}
+            onOpenCart={openCart}
             sessionUserId={session.user.id}
           />
         ))}

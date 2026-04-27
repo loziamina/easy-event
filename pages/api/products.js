@@ -51,13 +51,16 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       const { categoryId, type, occasionType, available, organizerId } = req.query;
+      const requestedOrganizerId = organizerId ? Number(organizerId) : null;
 
       const products = await prisma.product.findMany({
         where: {
           categoryId: categoryId ? Number(categoryId) : undefined,
           type: type ? String(type) : undefined,
           isAvailable: available === 'true' ? true : undefined,
-          organizerId: organizerId ? Number(organizerId) : undefined,
+          OR: requestedOrganizerId
+            ? [{ organizerId: requestedOrganizerId }, { organizerId: null }]
+            : undefined,
         },
         include: { category: true, organizer: true },
         orderBy: { createdAt: 'desc' },

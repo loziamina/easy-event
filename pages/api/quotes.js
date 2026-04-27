@@ -22,6 +22,24 @@ function includeQuoteDetails() {
   };
 }
 
+function toMoney(value, fallback = 0) {
+  if (value === '' || value == null) return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+async function notifyUser(userId, type, title, body) {
+  if (!userId) return;
+  await prisma.notification.create({
+    data: {
+      userId: Number(userId),
+      type,
+      title,
+      body,
+    },
+  });
+}
+
 export default async function handler(req, res) {
   try {
     const session = await getServerSession(req, res, authOptions);
@@ -134,7 +152,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'PATCH') {
-      const { id, action, clientComment } = req.body || {};
+      const { id, action, clientComment, organizerComment, quotePatch } = req.body || {};
       const quoteId = Number(id);
       if (!quoteId || !action) return res.status(400).json({ message: 'id and action required' });
 
@@ -144,6 +162,137 @@ export default async function handler(req, res) {
       });
       if (!quote) return res.status(404).json({ message: 'Quote not found' });
       if (!isStaff && quote.event.ownerId !== uid) return res.status(403).json({ message: 'Forbidden' });
+
+      if (action === 'comment' && !isStaff) {
+        const trimmedComment = String(clientComment || '').trim();
+        if (!trimmedComment) return res.status(400).json({ message: 'Comment required' });
+
+        const updated = await prisma.quote.update({
+          where: { id: quote.id },
+          data: { clientComment: trimmedComment },
+          include: includeQuoteDetails(),
+        });
+
+        await writeAudit({
+          actorId: uid,
+          action: 'QUOTE_COMMENT_UPDATED',
+          entity: 'Quote',
+          entityId: quote.id,
+        });
+
+        return res.status(200).json(updated);
+      }
+
+      if (action === 'deleteComment' && !isStaff) {
+        const updated = await prisma.quote.update({
+          where: { id: quote.id },
+          data: { clientComment: null },
+          include: includeQuoteDetails(),
+        });
+
+        await writeAudit({
+          actorId: uid,
+          action: 'QUOTE_COMMENT_DELETED',
+          entity: 'Quote',
+          entityId: quote.id,
+        });
+
+        return res.status(200).json(updated);
+      }
+
+      if (action === 'staffComment' && isStaff) {
+        const trimmedComment = String(organizerComment || clientComment || '').trim();
+        if (!trimmedComment) return res.status(400).json({ message: 'Comment required' });
+
+        const updated = await prisma.quote.update({
+          where: { id: quote.id },
+          data: { organizerComment: trimmedComment },
+          include: includeQuoteDetails(),
+        });
+
+        await writeAudit({
+          actorId: uid,
+          action: 'QUOTE_STAFF_COMMENT_UPDATED',
+          entity: 'Quote',
+          entityId: quote.id,
+        });
+
+        await notifyUser(
+          quote.event.ownerId,
+          'QUOTE_COMMENT_REPLY',
+          'Reponse a ton commentaire',
+          `Une reponse a ete ajoutee sur le devis ${quote.number}.`
+        );
+
+        return res.status(200).json(updated);
+      }
+
+      if (action === 'deleteStaffComment' && isStaff) {
+        const updated = await prisma.quote.update({
+          where: { id: quote.id },
+          data: { organizerComment: null },
+          include: includeQuoteDetails(),
+        });
+
+        await writeAudit({
+          actorId: uid,
+          action: 'QUOTE_STAFF_COMMENT_DELETED',
+          entity: 'Quote',
+          entityId: quote.id,
+        });
+
+        return res.status(200).json(updated);
+      }
+
+      if (action === 'updateQuote' && isStaff) {
+        const patch = quotePatch || {};
+        const deliveryFee = Math.max(0, toMoney(patch.deliveryFee, quote.deliveryFee));
+        const installationFee = Math.max(0, toMoney(patch.installationFee, quote.installationFee));
+        const discount = Math.max(0, toMoney(patch.discount, quote.discount));
+        const total = Math.max(0, Number(quote.subtotal || 0) + deliveryFee + installationFee - discount);
+
+        const updated = await prisma.quote.update({
+          where: { id: quote.id },
+          data: {
+            deliveryFee,
+            installationFee,
+            discount,
+            total,
+            depositAmount: patch.depositAmount === '' || patch.depositAmount == null
+              ? null
+              : Math.max(0, toMoney(patch.depositAmount, quote.depositAmount || 0)),
+            depositRequired: Boolean(patch.depositRequired),
+            terms: patch.terms != null && String(patch.terms).trim()
+              ? String(patch.terms).trim()
+              : null,
+          },
+          include: includeQuoteDetails(),
+        });
+
+        await writeEventHistory({
+          eventId: quote.eventId,
+          actorId: uid,
+          action: 'QUOTE_UPDATED',
+          details: { quoteId: quote.id, number: quote.number, total },
+        });
+
+        await writeAudit({
+          actorId: uid,
+          action: 'QUOTE_UPDATED',
+          entity: 'Quote',
+          entityId: quote.id,
+          details: { total },
+        });
+
+        await notifyUser(
+          quote.event.ownerId,
+          'QUOTE_UPDATED',
+          'Devis modifie',
+          `Le devis ${quote.number} a ete modifie. Nouveau total: ${Number(total || 0).toLocaleString('fr-FR')} EUR.`
+        );
+
+        return res.status(200).json(updated);
+      }
 
       let nextStatus = quote.status;
       if (action === 'send' && isStaff) nextStatus = QUOTE_STATUS.SENT;

@@ -5,8 +5,10 @@ const emptyCheckout = {
   deliveryAddress: '',
   deliverySlot: '',
   clientNotes: '',
-  deliveryFee: '0',
-  installationFee: '0',
+};
+
+const emptyAddForm = {
+  quantities: {},
 };
 
 function money(value) {
@@ -23,8 +25,10 @@ function minutesLeft(date) {
   return Math.ceil(diff / 60000);
 }
 
-export default function EventCart({ eventId }) {
+export default function EventCart({ eventId, event }) {
   const [items, setItems] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [addForm, setAddForm] = useState(emptyAddForm);
   const [summary, setSummary] = useState(null);
   const [orders, setOrders] = useState([]);
   const [checkout, setCheckout] = useState(emptyCheckout);
@@ -33,8 +37,8 @@ export default function EventCart({ eventId }) {
 
   const localSummary = useMemo(() => {
     const subtotalFixed = summary?.subtotalFixed || 0;
-    const deliveryFee = Number(checkout.deliveryFee || 0);
-    const installationFee = Number(checkout.installationFee || 0);
+    const deliveryFee = summary?.deliveryFee || 0;
+    const installationFee = summary?.installationFee || 0;
     return {
       subtotalFixed,
       deliveryFee,
@@ -42,7 +46,7 @@ export default function EventCart({ eventId }) {
       totalFixed: subtotalFixed + deliveryFee + installationFee,
       hasQuoteItems: Boolean(summary?.hasQuoteItems),
     };
-  }, [summary, checkout.deliveryFee, checkout.installationFee]);
+  }, [summary]);
 
   async function fetchItems() {
     if (!eventId) return;
@@ -68,17 +72,65 @@ export default function EventCart({ eventId }) {
     if (res.ok) setOrders(data.orders || []);
   }
 
+  async function fetchProducts() {
+    if (!eventId) return;
+    const params = new URLSearchParams();
+    if (event?.organizerId) params.set('organizerId', String(event.organizerId));
+
+    const res = await fetch(`/api/products${params.toString() ? `?${params.toString()}` : ''}`);
+    const data = await res.json().catch(() => ({ products: [] }));
+    if (res.ok) setProducts((data.products || []).filter((product) => product.isAvailable));
+    else setProducts([]);
+  }
+
   useEffect(() => {
     setItems([]);
+    setProducts([]);
     setSummary(null);
     setOrders([]);
+    setAddForm(emptyAddForm);
     setCheckout(emptyCheckout);
     fetchItems();
     fetchOrders();
-  }, [eventId]);
+    fetchProducts();
+  }, [eventId, event?.organizerId]);
 
   function updateCheckout(field, value) {
     setCheckout((current) => ({ ...current, [field]: value }));
+  }
+
+  function quantityFor(productId) {
+    return addForm.quantities?.[productId] || '1';
+  }
+
+  function updateProductQuantity(productId, value) {
+    const nextValue = Math.max(1, Number(value || 1));
+    setAddForm((current) => ({
+      ...current,
+      quantities: {
+        ...current.quantities,
+        [productId]: String(nextValue),
+      },
+    }));
+  }
+
+  async function addItem(productId) {
+    const res = await fetch(`/api/events/${eventId}/items`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        productId,
+        quantity: Number(quantityFor(productId)),
+      }),
+    });
+
+    if (!res.ok) {
+      error('Ajout impossible', await res.text());
+      return;
+    }
+
+    success('Prestation ajoutee au panier');
+    fetchItems();
   }
 
   async function updateQuantity(itemId, quantity, note, variant) {
@@ -150,6 +202,71 @@ export default function EventCart({ eventId }) {
 
       {!eventId && <p className="text-gray-500">Choisis d'abord un evenement.</p>}
       {eventId && loading && <p className="text-gray-500">Chargement du panier...</p>}
+      {eventId && (
+        <section className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div className="mb-4 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+            <div>
+              <h4 className="text-lg font-bold text-slate-900">Catalogue des prestations</h4>
+              <p className="text-sm text-slate-500">Ajoute les produits directement dans le panier de cet evenement.</p>
+            </div>
+            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+              {products.length} offre(s)
+            </span>
+          </div>
+
+          {products.length > 0 ? (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {products.map((product) => (
+                <article key={product.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <img
+                    src={product.image || product.gallery?.[0] || 'https://placehold.co/600x400?text=Offre'}
+                    alt={product.name}
+                    className="h-40 w-full object-cover"
+                  />
+                  <div className="space-y-3 p-4">
+                    <div>
+                      <h5 className="line-clamp-2 font-bold text-slate-900">{product.name}</h5>
+                      <p className="mt-1 text-sm text-slate-500">{product.category?.name || 'Sans categorie'}</p>
+                    </div>
+
+                    {product.description ? (
+                      <p className="line-clamp-2 text-sm leading-6 text-slate-600">{product.description}</p>
+                    ) : null}
+
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-bold text-indigo-700">{product.price}</p>
+                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                        Stock: {product.stock ?? 'illimite'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        className="app-input h-10 w-20 rounded-xl px-3 text-center"
+                        type="number"
+                        min="1"
+                        value={quantityFor(product.id)}
+                        onChange={(e) => updateProductQuantity(product.id, e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => addItem(product.id)}
+                        className="app-button-primary h-10 flex-1 rounded-xl px-3 text-sm font-semibold"
+                      >
+                        Ajouter
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-500">
+              Aucune prestation disponible pour cet organisateur.
+            </p>
+          )}
+        </section>
+      )}
       {eventId && !loading && items.length === 0 && <p className="text-gray-500">Aucun produit dans le panier.</p>}
 
       <div className="space-y-4">
@@ -236,27 +353,6 @@ export default function EventCart({ eventId }) {
               value={checkout.clientNotes}
               onChange={(e) => updateCheckout('clientNotes', e.target.value)}
             />
-            <div className="grid md:grid-cols-2 gap-3">
-              <input
-                className="p-3 border rounded-xl"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="Frais livraison"
-                value={checkout.deliveryFee}
-                onChange={(e) => updateCheckout('deliveryFee', e.target.value)}
-              />
-              <input
-                className="p-3 border rounded-xl"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="Frais installation"
-                value={checkout.installationFee}
-                onChange={(e) => updateCheckout('installationFee', e.target.value)}
-              />
-            </div>
-
             <button className="bg-violet-600 text-white px-5 py-3 rounded-xl font-semibold hover:bg-violet-700">
               Convertir le panier en commande
             </button>

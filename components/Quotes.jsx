@@ -1,6 +1,6 @@
 import useSWR from 'swr';
 import { useSession } from 'next-auth/react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useToast } from './ToastProvider';
 
 const fetcher = (url) => fetch(url).then((res) => res.json());
@@ -79,8 +79,83 @@ function SummaryLine({ label, value, strong = false, accent = false }) {
   );
 }
 
-function QuotePreview({ quote, isStaff, onSend, onDelete, onDecision }) {
-  const [comment, setComment] = useState('');
+function QuotePreview({ quote, isStaff, onSend, onDelete, onDecision, onComment }) {
+  const [comment, setComment] = useState(quote.clientComment || '');
+  const [isEditingComment, setIsEditingComment] = useState(!quote.clientComment);
+  const [staffComment, setStaffComment] = useState(quote.organizerComment || '');
+  const [isEditingStaffComment, setIsEditingStaffComment] = useState(!quote.organizerComment);
+  const [isEditingQuote, setIsEditingQuote] = useState(false);
+  const [editForm, setEditForm] = useState({
+    deliveryFee: String(quote.deliveryFee || 0),
+    installationFee: String(quote.installationFee || 0),
+    discount: String(quote.discount || 0),
+    depositAmount: quote.depositAmount == null ? '' : String(quote.depositAmount),
+    depositRequired: Boolean(quote.depositRequired),
+    terms: quote.terms || '',
+  });
+
+  useEffect(() => {
+    setComment(quote.clientComment || '');
+    setIsEditingComment(!quote.clientComment);
+    setStaffComment(quote.organizerComment || '');
+    setIsEditingStaffComment(!quote.organizerComment);
+    setEditForm({
+      deliveryFee: String(quote.deliveryFee || 0),
+      installationFee: String(quote.installationFee || 0),
+      discount: String(quote.discount || 0),
+      depositAmount: quote.depositAmount == null ? '' : String(quote.depositAmount),
+      depositRequired: Boolean(quote.depositRequired),
+      terms: quote.terms || '',
+    });
+  }, [
+    quote.clientComment,
+    quote.organizerComment,
+    quote.deliveryFee,
+    quote.installationFee,
+    quote.discount,
+    quote.depositAmount,
+    quote.depositRequired,
+    quote.terms,
+  ]);
+
+  async function submitComment() {
+    const value = comment.trim();
+    if (!value) return;
+    const saved = await onComment(quote.id, 'comment', value);
+    if (saved) setIsEditingComment(false);
+  }
+
+  async function deleteComment() {
+    const deleted = await onComment(quote.id, 'deleteComment');
+    if (deleted) {
+      setComment('');
+      setIsEditingComment(true);
+    }
+  }
+
+  async function submitStaffComment() {
+    const value = staffComment.trim();
+    if (!value) return;
+    const saved = await onComment(quote.id, 'staffComment', value);
+    if (saved) setIsEditingStaffComment(false);
+  }
+
+  async function deleteStaffComment() {
+    const deleted = await onComment(quote.id, 'deleteStaffComment');
+    if (deleted) {
+      setStaffComment('');
+      setIsEditingStaffComment(true);
+    }
+  }
+
+  function updateEditForm(field, value) {
+    setEditForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function submitQuoteEdit() {
+    const saved = await onComment(quote.id, 'updateQuote', editForm);
+    if (saved) setIsEditingQuote(false);
+  }
 
   return (
     <article className="surface-card overflow-hidden rounded-[1.6rem]">
@@ -143,6 +218,13 @@ function QuotePreview({ quote, isStaff, onSend, onDelete, onDecision }) {
                 <p className="whitespace-pre-wrap">{quote.clientComment}</p>
               </div>
             ) : null}
+
+            {quote.organizerComment ? (
+              <div className="rounded-[1.2rem] border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-900">
+                <p className="mb-2 font-semibold">Reponse organisateur</p>
+                <p className="whitespace-pre-wrap">{quote.organizerComment}</p>
+              </div>
+            ) : null}
           </div>
 
           <div className="rounded-[1.3rem] border border-slate-200 bg-white p-5 shadow-sm">
@@ -167,6 +249,79 @@ function QuotePreview({ quote, isStaff, onSend, onDelete, onDecision }) {
 
           {isStaff ? (
             <>
+              <div className="w-full rounded-[1.2rem] border border-slate-200 bg-white p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="font-semibold text-slate-900">Modification rapide du devis</p>
+                  {!isEditingQuote ? (
+                    <button type="button" onClick={() => setIsEditingQuote(true)} className="app-button-secondary rounded-xl px-4 py-2 text-sm font-semibold">
+                      Modifier devis
+                    </button>
+                  ) : null}
+                </div>
+
+                {isEditingQuote ? (
+                  <div className="mt-4 space-y-3">
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <input className="app-input rounded-xl px-4 py-3" type="number" min="0" step="0.01" placeholder="Frais livraison" value={editForm.deliveryFee} onChange={(e) => updateEditForm('deliveryFee', e.target.value)} />
+                      <input className="app-input rounded-xl px-4 py-3" type="number" min="0" step="0.01" placeholder="Frais installation" value={editForm.installationFee} onChange={(e) => updateEditForm('installationFee', e.target.value)} />
+                      <input className="app-input rounded-xl px-4 py-3" type="number" min="0" step="0.01" placeholder="Remise" value={editForm.discount} onChange={(e) => updateEditForm('discount', e.target.value)} />
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <input className="app-input rounded-xl px-4 py-3" type="number" min="0" step="0.01" placeholder="Acompte" value={editForm.depositAmount} onChange={(e) => updateEditForm('depositAmount', e.target.value)} />
+                      <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700">
+                        <input type="checkbox" checked={editForm.depositRequired} onChange={(e) => updateEditForm('depositRequired', e.target.checked)} />
+                        Acompte requis
+                      </label>
+                    </div>
+                    <textarea className="app-textarea min-h-[90px] w-full rounded-xl px-4 py-3" rows="2" placeholder="Conditions" value={editForm.terms} onChange={(e) => updateEditForm('terms', e.target.value)} />
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={submitQuoteEdit} className="app-button-primary rounded-xl px-4 py-2 font-semibold">
+                        Enregistrer les modifications
+                      </button>
+                      <button type="button" onClick={() => setIsEditingQuote(false)} className="rounded-xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 hover:bg-slate-50">
+                        Annuler
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="w-full space-y-3 rounded-[1.2rem] border border-slate-200 bg-slate-50 p-4">
+                {isEditingStaffComment ? (
+                  <>
+                    <textarea
+                      className="app-textarea min-h-[90px] w-full rounded-xl px-3 py-2"
+                      rows="2"
+                      placeholder="Repondre au commentaire du client"
+                      value={staffComment}
+                      onChange={(e) => setStaffComment(e.target.value)}
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={submitStaffComment} className="app-button-secondary rounded-xl px-4 py-2 font-semibold">
+                        Envoyer la reponse
+                      </button>
+                      {quote.organizerComment ? (
+                        <button type="button" onClick={() => {
+                          setStaffComment(quote.organizerComment || '');
+                          setIsEditingStaffComment(false);
+                        }} className="rounded-xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 hover:bg-slate-50">
+                          Annuler
+                        </button>
+                      ) : null}
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={() => setIsEditingStaffComment(true)} className="app-button-secondary rounded-xl px-4 py-2 font-semibold">
+                      Modifier la reponse
+                    </button>
+                    <button type="button" onClick={deleteStaffComment} className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 font-semibold text-rose-700 hover:bg-rose-100">
+                      Supprimer la reponse
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {quote.status === 'DRAFT' ? (
                 <button onClick={() => onSend(quote.id)} className="app-button-primary rounded-xl px-4 py-2 font-semibold">
                   Envoyer
@@ -178,14 +333,41 @@ function QuotePreview({ quote, isStaff, onSend, onDelete, onDecision }) {
             </>
           ) : quote.status === 'SENT' ? (
             <div className="w-full space-y-3 rounded-[1.2rem] border border-slate-200 bg-slate-50 p-4">
-              <textarea
-                className="app-textarea min-h-[90px] w-full rounded-xl px-3 py-2"
-                rows="2"
-                placeholder="Commentaire optionnel"
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-              />
-              <div className="flex flex-wrap gap-2">
+              {isEditingComment ? (
+                <>
+                  <textarea
+                    className="app-textarea min-h-[90px] w-full rounded-xl px-3 py-2"
+                    rows="2"
+                    placeholder="Commentaire optionnel"
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={submitComment} className="app-button-secondary rounded-xl px-4 py-2 font-semibold">
+                      Envoyer le commentaire
+                    </button>
+                    {quote.clientComment ? (
+                      <button type="button" onClick={() => {
+                        setComment(quote.clientComment || '');
+                        setIsEditingComment(false);
+                      }} className="rounded-xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 hover:bg-slate-50">
+                        Annuler
+                      </button>
+                    ) : null}
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => setIsEditingComment(true)} className="app-button-secondary rounded-xl px-4 py-2 font-semibold">
+                    Modifier le commentaire
+                  </button>
+                  <button type="button" onClick={deleteComment} className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 font-semibold text-rose-700 hover:bg-rose-100">
+                    Supprimer le commentaire
+                  </button>
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-2 border-t border-slate-200 pt-3">
                 <button onClick={() => onDecision(quote.id, 'accept', comment)} className="rounded-xl bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-700">
                   Accepter
                 </button>
@@ -274,6 +456,35 @@ export default function Quotes() {
       success('Devis mis a jour');
     } else {
       error('Action impossible', await res.text());
+    }
+  }
+
+  async function quoteCommentAction(id, action, commentText) {
+    const isQuoteUpdate = action === 'updateQuote';
+    const res = await fetch('/api/quotes', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id,
+        action,
+        clientComment: isQuoteUpdate ? undefined : commentText,
+        organizerComment: isQuoteUpdate ? undefined : commentText,
+        quotePatch: isQuoteUpdate ? commentText : undefined,
+      }),
+    });
+    if (res.ok) {
+      mutate();
+      const message = {
+        deleteComment: 'Commentaire supprime',
+        staffComment: 'Reponse envoyee',
+        deleteStaffComment: 'Reponse supprimee',
+        updateQuote: 'Devis modifie',
+      }[action] || 'Commentaire envoye';
+      success(message);
+      return true;
+    } else {
+      error('Commentaire impossible', await res.text());
+      return false;
     }
   }
 
@@ -383,6 +594,7 @@ export default function Quotes() {
             onSend={(id) => quoteAction(id, 'send')}
             onDelete={deleteQuote}
             onDecision={quoteAction}
+            onComment={quoteCommentAction}
           />
         ))}
         {quotes.length === 0 ? (

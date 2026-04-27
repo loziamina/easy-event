@@ -54,8 +54,6 @@ export default async function handler(req, res) {
       deliveryAddress,
       deliverySlot,
       clientNotes,
-      deliveryFee,
-      installationFee,
     } = req.body || {};
 
     if (!deliveryAddress || !deliverySlot) {
@@ -94,7 +92,7 @@ export default async function handler(req, res) {
       }
     }
 
-    const summary = summarizeCart(items, { deliveryFee, installationFee });
+    const summary = summarizeCart(items, { deliveryFee: 0, installationFee: 0 });
     const reservedUntil = new Date(Date.now() + RESERVATION_MINUTES * 60 * 1000);
 
     const order = await prisma.$transaction(async (tx) => {

@@ -12,6 +12,9 @@ export default function Sidebar({ current, onChange, isAuthed, role }) {
   const canManageOrganizers = role === 'PLATFORM_ADMIN';
   const { data } = useSWR(isAuthed ? '/api/notifications' : null, fetcher, { refreshInterval: 5000 });
   const unreadMessages = data?.unreadMessages || 0;
+  const quoteNotifications = (data?.notifications || []).filter((notification) =>
+    ['QUOTE_COMMENT_REPLY', 'QUOTE_UPDATED'].includes(notification.type)
+  ).length;
 
   const nav = [
     { id: 'dashboard', label: 'Tableau de bord' },
@@ -58,6 +61,11 @@ export default function Sidebar({ current, onChange, isAuthed, role }) {
                 {n.id === 'chat' && unreadMessages > 0 && (
                   <span className="ml-auto min-w-[24px] px-2 py-0.5 rounded-full bg-rose-500 text-white text-xs text-center shadow-sm">
                     {unreadMessages}
+                  </span>
+                )}
+                {n.id === 'quotes' && quoteNotifications > 0 && (
+                  <span className="ml-auto min-w-[24px] px-2 py-0.5 rounded-full bg-rose-500 text-white text-xs text-center shadow-sm">
+                    {quoteNotifications}
                   </span>
                 )}
               </button>
