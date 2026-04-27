@@ -3,7 +3,7 @@ import { authOptions } from './auth/[...nextauth]';
 import { prisma } from '../../lib/prisma';
 import { writeAudit } from '../../lib/audit';
 import { notifyOrganizerUsers } from '../../lib/notifications';
-import { canManageOperations, isPlatformAdmin } from '../../lib/permissions';
+import { canAccessEventRecord, canManageOperations } from '../../lib/permissions';
 
 function clampRating(value) {
   const number = Number(value);
@@ -100,14 +100,12 @@ export default async function handler(req, res) {
       },
     });
     const isStaff = canManageOperations(session.user);
-    const platformAdmin = isPlatformAdmin(session.user);
-    const actorOrganizerId = session.user.organizerId ? Number(session.user.organizerId) : null;
 
     if (['PATCH', 'DELETE'].includes(req.method)) {
       if (!existingReview) return res.status(404).json({ message: 'Review not found' });
 
       const isAuthor = existingReview.authorId === Number(session.user.id);
-      const canModerate = isStaff && (platformAdmin || existingReview.organizerId === actorOrganizerId);
+      const canModerate = isStaff && canAccessEventRecord(session.user, existingReview.event);
       if (!isAuthor && !canModerate) return res.status(403).json({ message: 'Forbidden' });
 
       if (req.method === 'PATCH') {

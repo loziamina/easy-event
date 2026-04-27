@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from './auth/[...nextauth]';
 import { prisma } from '../../lib/prisma';
-import { canManageOperations, isPlatformAdmin } from '../../lib/permissions';
+import { canAccessEventRecord, canManageOperations, eventScopeForUser } from '../../lib/permissions';
 import { writeAudit } from '../../lib/audit';
 import { notifyOrganizerUsers, notifyUser } from '../../lib/notifications';
 import {
@@ -158,17 +158,11 @@ export default async function handler(req, res) {
     }
 
     const isStaff = canManageOperations(session.user);
-    const isAdmin = isPlatformAdmin(session.user);
     const uid = Number(session.user.id);
-    const actorOrganizerId = session.user.organizerId ? Number(session.user.organizerId) : null;
 
     if (req.method === 'GET') {
       const events = await prisma.event.findMany({
-        where: isStaff
-          ? isAdmin
-            ? undefined
-            : { organizerId: actorOrganizerId }
-          : { ownerId: uid },
+        where: eventScopeForUser(session.user),
         include: includeEventDetails(),
         orderBy: { createdAt: 'desc' },
       });
@@ -374,7 +368,7 @@ export default async function handler(req, res) {
 
       const existing = await prisma.event.findUnique({ where: { id: Number(id) } });
       if (!existing) return res.status(404).json({ message: 'Event not found' });
-      if (!isAdmin && existing.organizerId !== actorOrganizerId) {
+      if (!canAccessEventRecord(session.user, existing)) {
         return res.status(403).json({ message: 'Forbidden' });
       }
 

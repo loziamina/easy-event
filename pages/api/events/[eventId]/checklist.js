@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../../auth/[...nextauth]';
 import { prisma } from '../../../../lib/prisma';
-import { canManageOperations } from '../../../../lib/permissions';
+import { canAccessEventRecord, canManageOperations } from '../../../../lib/permissions';
 import { writeAudit } from '../../../../lib/audit';
 import { writeEventHistory } from '../../../../lib/events';
 import { toDate } from '../../../../lib/planning';
@@ -17,6 +17,7 @@ export default async function handler(req, res) {
 
     const event = await prisma.event.findUnique({ where: { id: eventId } });
     if (!event) return res.status(404).json({ message: 'Event not found' });
+    if (!canAccessEventRecord(session.user, event)) return res.status(403).json({ message: 'Forbidden' });
 
     if (req.method === 'GET') {
       const checklist = await prisma.eventChecklistItem.findMany({

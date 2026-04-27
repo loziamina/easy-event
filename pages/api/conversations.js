@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from './auth/[...nextauth]';
 import { prisma } from '../../lib/prisma';
-import { canManageOperations, isPlatformAdmin } from '../../lib/permissions';
+import { canManageOperations, isOrganizerStaff, isPlatformAdmin } from '../../lib/permissions';
 import { writeAudit } from '../../lib/audit';
 
 async function getAdminUser() {
@@ -195,6 +195,7 @@ export default async function handler(req, res) {
   const role = session.user.role;
   const isStaff = canManageOperations(session.user);
   const platformAdmin = isPlatformAdmin(session.user);
+  const staffAssignedOnly = isOrganizerStaff(session.user);
   const supportMode = req.query.support === 'true' || req.body?.support === true;
   const organizerId = session.user.organizerId ? Number(session.user.organizerId) : null;
 
@@ -277,7 +278,20 @@ export default async function handler(req, res) {
         const where = {
           organizerId: organizerId || undefined,
           clientId: clientId || undefined,
-          client: { role: 'CLIENT' },
+          client: {
+            role: 'CLIENT',
+            ...(staffAssignedOnly
+              ? {
+                  events: {
+                    some: {
+                      organizerId,
+                      assignedStaffId: uid,
+                      status: { in: ['PENDING_APPROVAL', 'ACCEPTED', 'PLANNED', 'DONE'] },
+                    },
+                  },
+                }
+              : {}),
+          },
         };
 
         const convs = await prisma.conversation.findMany({
@@ -288,6 +302,7 @@ export default async function handler(req, res) {
                 events: {
                   where: {
                     status: { in: ['PENDING_APPROVAL', 'ACCEPTED', 'PLANNED', 'DONE'] },
+                    ...(staffAssignedOnly ? { organizerId, assignedStaffId: uid } : {}),
                   },
                   orderBy: { date: 'desc' },
                   take: 1,
@@ -380,6 +395,18 @@ export default async function handler(req, res) {
         effectiveClientId = Number(clientId);
         if (!effectiveClientId) {
           return res.status(400).json({ message: 'clientId required for organizer' });
+        }
+        if (staffAssignedOnly) {
+          const assignedEvent = await prisma.event.findFirst({
+            where: {
+              ownerId: effectiveClientId,
+              organizerId,
+              assignedStaffId: uid,
+              status: { in: ['PENDING_APPROVAL', 'ACCEPTED', 'PLANNED', 'DONE'] },
+            },
+            select: { id: true },
+          });
+          if (!assignedEvent) return res.status(403).json({ message: 'Forbidden' });
         }
       }
 
@@ -507,12 +534,18 @@ export default async function handler(req, res) {
 
       const conv = await prisma.conversation.findUnique({
         where: { id },
-        include: { client: true },
+        include: { client: { include: { events: true } } },
       });
       if (!conv) return res.status(404).json({ message: 'Conversation not found' });
 
       const kind = conv.client?.role === 'CLIENT' ? 'CLIENT_SERVICE' : 'PLATFORM_SUPPORT';
       if (!platformAdmin && !isStaff && conv.clientId !== uid) return res.status(403).json({ message: 'Forbidden' });
+      if (staffAssignedOnly && kind === 'CLIENT_SERVICE') {
+        const hasAssignedEvent = conv.client?.events?.some((event) => (
+          Number(event.organizerId) === organizerId && Number(event.assignedStaffId) === uid
+        ));
+        if (!hasAssignedEvent) return res.status(403).json({ message: 'Forbidden' });
+      }
 
       if (platformAdmin || (isStaff && kind === 'CLIENT_SERVICE')) {
         await prisma.conversation.update({

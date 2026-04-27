@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from './auth/[...nextauth]';
 import { prisma } from '../../lib/prisma';
-import { canManageOperations } from '../../lib/permissions';
+import { canAccessEventRecord, canManageOperations, eventScopeForUser } from '../../lib/permissions';
 import { writeAudit } from '../../lib/audit';
 import { writeEventHistory } from '../../lib/events';
 import { notifyOrganizerUsers, notifyUser } from '../../lib/notifications';
@@ -25,7 +25,7 @@ async function canAccessEvent(eventId, session) {
     include: { owner: { select: { id: true, name: true, email: true } } },
   });
   if (!event) return { ok: false, status: 404, message: 'Event not found' };
-  if (!canManageOperations(session.user) && event.ownerId !== Number(session.user.id)) {
+  if (!canAccessEventRecord(session.user, event)) {
     return { ok: false, status: 403, message: 'Forbidden' };
   }
   return { ok: true, event };
@@ -40,8 +40,9 @@ export default async function handler(req, res) {
     const uid = Number(session.user.id);
 
     if (req.method === 'GET') {
+      const scope = eventScopeForUser(session.user);
       const where = isStaff
-        ? {}
+        ? scope ? { event: scope } : {}
         : { event: { ownerId: uid } };
 
       const mockups = await prisma.mockup.findMany({
@@ -114,7 +115,7 @@ export default async function handler(req, res) {
         include: { event: true },
       });
       if (!mockup) return res.status(404).json({ message: 'Mockup not found' });
-      if (!isStaff && mockup.event.ownerId !== uid) return res.status(403).json({ message: 'Forbidden' });
+      if (!canAccessEventRecord(session.user, mockup.event)) return res.status(403).json({ message: 'Forbidden' });
 
       if (action === 'comment') {
         if (!text) return res.status(400).json({ message: 'text required' });
@@ -188,8 +189,11 @@ export default async function handler(req, res) {
       if (!isStaff) return res.status(403).json({ message: 'Forbidden' });
       const id = Number(req.body?.id);
       if (!id) return res.status(400).json({ message: 'id required' });
-      await prisma.mockupComment.deleteMany({ where: { mockupId: id } });
-      await prisma.mockup.delete({ where: { id } });
+      const mockup = await prisma.mockup.findUnique({ where: { id }, include: { event: true } });
+      if (!mockup) return res.status(404).json({ message: 'Mockup not found' });
+      if (!canAccessEventRecord(session.user, mockup.event)) return res.status(403).json({ message: 'Forbidden' });
+      await prisma.mockupComment.deleteMany({ where: { mockupId: mockup.id } });
+      await prisma.mockup.delete({ where: { id: mockup.id } });
       await writeAudit({ actorId: uid, action: 'MOCKUP_DELETED', entity: 'Mockup', entityId: id });
       return res.status(204).end();
     }

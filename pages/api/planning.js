@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from './auth/[...nextauth]';
 import { prisma } from '../../lib/prisma';
-import { canManageOperations, isPlatformAdmin } from '../../lib/permissions';
+import { canManageAllOrganizerEvents, canManageOperations, isOrganizerStaff, isPlatformAdmin } from '../../lib/permissions';
 import { writeAudit } from '../../lib/audit';
 import { writeEventHistory } from '../../lib/events';
 import { detectPlanningConflicts, toDate } from '../../lib/planning';
@@ -21,15 +21,23 @@ export default async function handler(req, res) {
 
     const actorId = Number(session.user.id);
     const platformAdmin = isPlatformAdmin(session.user);
+    const staffAssignedOnly = isOrganizerStaff(session.user);
+    const canAssignEvents = canManageAllOrganizerEvents(session.user);
     const organizerId = session.user.organizerId ? Number(session.user.organizerId) : null;
 
     if (req.method === 'GET') {
       const { start, end } = rangeFromQuery(req.query);
+      const eventVisibilityWhere = platformAdmin
+        ? {}
+        : {
+            organizerId,
+            ...(staffAssignedOnly ? { assignedStaffId: actorId } : {}),
+          };
       const organizerEventIds = platformAdmin
         ? []
         : (
             await prisma.event.findMany({
-              where: { organizerId },
+              where: eventVisibilityWhere,
               select: { id: true },
             })
           ).map((event) => event.id);
@@ -37,7 +45,7 @@ export default async function handler(req, res) {
       const [events, blocks, staff] = await Promise.all([
         prisma.event.findMany({
           where: {
-            organizerId: platformAdmin ? undefined : organizerId,
+            ...eventVisibilityWhere,
             date: { gte: start, lt: end },
             status: { in: ['ACCEPTED', 'PLANNED', 'DONE'] },
           },
@@ -55,10 +63,15 @@ export default async function handler(req, res) {
             endAt: { gt: start },
             OR: platformAdmin
               ? undefined
-              : [
-                  { eventId: null },
-                  ...(organizerEventIds.length > 0 ? [{ eventId: { in: organizerEventIds } }] : []),
-                ],
+              : staffAssignedOnly
+                ? [
+                    { createdBy: actorId, eventId: null },
+                    { eventId: { in: organizerEventIds.length > 0 ? organizerEventIds : [-1] } },
+                  ]
+                : [
+                    { eventId: null },
+                    ...(organizerEventIds.length > 0 ? [{ eventId: { in: organizerEventIds } }] : []),
+                  ],
           },
           orderBy: { startAt: 'asc' },
         }),
@@ -111,6 +124,8 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'PATCH') {
+      if (!canAssignEvents) return res.status(403).json({ message: 'Only organizer owner can assign events' });
+
       const { eventId, assignedStaffId } = req.body || {};
       const parsedEventId = Number(eventId);
       const parsedStaffId = assignedStaffId ? Number(assignedStaffId) : null;

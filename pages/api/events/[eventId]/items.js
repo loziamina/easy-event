@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../../auth/[...nextauth]';
 import { prisma } from '../../../../lib/prisma';
-import { canManageOperations } from '../../../../lib/permissions';
+import { canAccessEventRecord, canManageOperations } from '../../../../lib/permissions';
 import { writeAudit } from '../../../../lib/audit';
 import { summarizeCart } from '../../../../lib/pricing';
 
@@ -33,7 +33,7 @@ export default async function handler(req, res) {
       return res.status(404).json({ message: 'Event not found' });
     }
 
-    if (!isStaff && event.ownerId !== uid) {
+    if (!canAccessEventRecord(session.user, event)) {
       return res.status(403).json({ message: 'Forbidden' });
     }
 

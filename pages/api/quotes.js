@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from './auth/[...nextauth]';
 import { prisma } from '../../lib/prisma';
-import { canManageOperations } from '../../lib/permissions';
+import { canAccessEventRecord, canManageOperations, eventScopeForUser } from '../../lib/permissions';
 import { writeAudit } from '../../lib/audit';
 import { writeEventHistory } from '../../lib/events';
 import { notifyOrganizerUsers } from '../../lib/notifications';
@@ -29,6 +29,12 @@ function toMoney(value, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function quoteScopeForUser(user, isStaff, uid) {
+  if (!isStaff) return { event: { ownerId: uid } };
+  const scope = eventScopeForUser(user);
+  return scope ? { event: scope } : {};
+}
+
 async function notifyUser(userId, type, title, body) {
   if (!userId) return;
   await prisma.notification.create({
@@ -50,12 +56,8 @@ export default async function handler(req, res) {
     const isStaff = canManageOperations(session.user);
 
     if (req.method === 'GET') {
-      const where = isStaff
-        ? {}
-        : { event: { ownerId: uid } };
-
       const quotes = await prisma.quote.findMany({
-        where,
+        where: quoteScopeForUser(session.user, isStaff, uid),
         include: includeQuoteDetails(),
         orderBy: { createdAt: 'desc' },
       });
@@ -90,6 +92,7 @@ export default async function handler(req, res) {
         },
       });
       if (!event) return res.status(404).json({ message: 'Event not found' });
+      if (!canAccessEventRecord(session.user, event)) return res.status(403).json({ message: 'Forbidden' });
 
       const template = templateId
         ? await prisma.quoteTemplate.findUnique({ where: { id: Number(templateId) } })
@@ -162,7 +165,7 @@ export default async function handler(req, res) {
         include: { event: true },
       });
       if (!quote) return res.status(404).json({ message: 'Quote not found' });
-      if (!isStaff && quote.event.ownerId !== uid) return res.status(403).json({ message: 'Forbidden' });
+      if (!canAccessEventRecord(session.user, quote.event)) return res.status(403).json({ message: 'Forbidden' });
 
       if (action === 'comment' && !isStaff) {
         const trimmedComment = String(clientComment || '').trim();
@@ -355,8 +358,11 @@ export default async function handler(req, res) {
       if (!isStaff) return res.status(403).json({ message: 'Forbidden' });
       const id = Number(req.body?.id);
       if (!id) return res.status(400).json({ message: 'id required' });
-      await prisma.quoteItem.deleteMany({ where: { quoteId: id } });
-      await prisma.quote.delete({ where: { id } });
+      const quote = await prisma.quote.findUnique({ where: { id }, include: { event: true } });
+      if (!quote) return res.status(404).json({ message: 'Quote not found' });
+      if (!canAccessEventRecord(session.user, quote.event)) return res.status(403).json({ message: 'Forbidden' });
+      await prisma.quoteItem.deleteMany({ where: { quoteId: quote.id } });
+      await prisma.quote.delete({ where: { id: quote.id } });
       await writeAudit({ actorId: uid, action: 'QUOTE_DELETED', entity: 'Quote', entityId: id });
       return res.status(204).end();
     }
