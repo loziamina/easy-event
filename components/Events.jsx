@@ -833,11 +833,24 @@ function ClientReservationSection({
   );
 }
 
-function StaffEventSection({ events, fetchEvents, onStatusUpdate, onOpenChat }) {
+function StaffEventSection({ events, fetchEvents, onStatusUpdate, onOpenChat, statusFilter, onStatusFilterChange }) {
   const pending = events.filter((event) => event.status === 'PENDING_APPROVAL').length;
   const accepted = events.filter((event) => event.status === 'ACCEPTED').length;
   const planned = events.filter((event) => event.status === 'PLANNED').length;
   const done = events.filter((event) => event.status === 'DONE').length;
+  const filteredEvents = events.filter((event) => {
+    if (statusFilter === 'PENDING_APPROVAL') return event.status === 'PENDING_APPROVAL';
+    if (statusFilter === 'IN_PROGRESS') return ['ACCEPTED', 'PLANNED'].includes(event.status);
+    if (statusFilter && statusFilter !== 'ALL') return event.status === statusFilter;
+    return true;
+  });
+  const filters = [
+    ['ALL', 'Tous'],
+    ['PENDING_APPROVAL', 'A accepter'],
+    ['IN_PROGRESS', 'En cours'],
+    ['PLANNED', 'Planifies'],
+    ['DONE', 'Termines'],
+  ];
 
   return (
     <section className="space-y-6">
@@ -859,8 +872,25 @@ function StaffEventSection({ events, fetchEvents, onStatusUpdate, onOpenChat }) 
         </div>
       </div>
 
+      <div className="flex flex-wrap gap-2">
+        {filters.map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => onStatusFilterChange(value)}
+            className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+              statusFilter === value
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'border border-slate-200 bg-white text-slate-700 hover:border-indigo-200 hover:bg-indigo-50'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       <div className="space-y-4">
-        {events.map((event) => (
+        {filteredEvents.map((event) => (
           <EventCard
             key={event.id}
             event={event}
@@ -871,7 +901,7 @@ function StaffEventSection({ events, fetchEvents, onStatusUpdate, onOpenChat }) 
           />
         ))}
 
-        {events.length === 0 ? (
+        {filteredEvents.length === 0 ? (
           <div className="page-section p-8 text-center text-slate-500">Aucune demande.</div>
         ) : null}
       </div>
@@ -895,6 +925,7 @@ export default function Events() {
   const [selectedClientId, setSelectedClientId] = useState(null);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [selectedCartEventId, setSelectedCartEventId] = useState(null);
+  const [staffStatusFilter, setStaffStatusFilter] = useState('ALL');
   const cartSectionRef = useRef(null);
 
   async function fetchEvents() {
@@ -911,6 +942,16 @@ export default function Events() {
   useEffect(() => {
     fetchEvents();
   }, [status]);
+
+  useEffect(() => {
+    if (!isStaff || typeof window === 'undefined') return;
+
+    const pendingFilter = window.localStorage.getItem('easy-event:eventStatusFilter');
+    if (pendingFilter) {
+      setStaffStatusFilter(pendingFilter);
+      window.localStorage.removeItem('easy-event:eventStatusFilter');
+    }
+  }, [isStaff]);
 
   useEffect(() => {
     if (status !== 'authenticated' || isStaff) return;
@@ -1053,6 +1094,10 @@ export default function Events() {
     setSelectedEvent(null);
   }
 
+  function updateStaffStatusFilter(filter) {
+    setStaffStatusFilter(filter || 'ALL');
+  }
+
   function startEditing(event) {
     setEditingEvent({
       ...event,
@@ -1118,7 +1163,14 @@ export default function Events() {
   if (isStaff) {
     return (
       <>
-        <StaffEventSection events={events} fetchEvents={fetchEvents} onStatusUpdate={handleStatusUpdate} onOpenChat={openChatModal} />
+        <StaffEventSection
+          events={events}
+          fetchEvents={fetchEvents}
+          onStatusUpdate={handleStatusUpdate}
+          onOpenChat={openChatModal}
+          statusFilter={staffStatusFilter}
+          onStatusFilterChange={updateStaffStatusFilter}
+        />
 
         <Modal isOpen={chatModalIsOpen} onRequestClose={closeChatModal} style={customStyles} contentLabel="Chat">
           <div className="flex items-center justify-between border-b p-4">

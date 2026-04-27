@@ -4,7 +4,7 @@ import OrganizerDirectory from './OrganizerDirectory';
 
 const fetcher = (url) => fetch(url).then((r) => r.json());
 
-function StatCard({ label, value, helper, accent = 'primary' }) {
+function StatCard({ label, value, helper, accent = 'primary', onClick }) {
   const accentClasses = {
     primary: 'from-indigo-50 via-violet-50 to-white text-indigo-700 border-indigo-100',
     warm: 'from-amber-50 via-orange-50 to-white text-amber-700 border-amber-100',
@@ -12,12 +12,18 @@ function StatCard({ label, value, helper, accent = 'primary' }) {
     pink: 'from-pink-50 via-rose-50 to-white text-pink-700 border-pink-100',
   };
 
+  const Component = onClick ? 'button' : 'article';
+
   return (
-    <article className={`rounded-[1.4rem] border bg-gradient-to-br p-6 shadow-sm ${accentClasses[accent] || accentClasses.primary}`}>
+    <Component
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
+      className={`rounded-[1.4rem] border bg-gradient-to-br p-6 text-left shadow-sm ${onClick ? 'cursor-pointer transition hover:-translate-y-[1px] hover:shadow-md focus:outline-none focus:ring-4 focus:ring-indigo-100' : ''} ${accentClasses[accent] || accentClasses.primary}`}
+    >
       <p className="text-sm font-semibold uppercase tracking-[0.04em] text-slate-500">{label}</p>
       <p className="mt-3 text-4xl font-bold text-slate-900">{value}</p>
       {helper ? <p className="mt-3 text-sm text-slate-500">{helper}</p> : null}
-    </article>
+    </Component>
   );
 }
 
@@ -94,11 +100,21 @@ export default function Dashboard({ onSelectOrganizer }) {
   const role = session?.user?.role;
   const isClient = role === 'CLIENT';
   const isPlatformAdmin = role === 'PLATFORM_ADMIN';
+  const isOrganizerWorkspace = ['ORGANIZER_OWNER', 'ORGANIZER_STAFF'].includes(role);
+  const toAccept = events.filter((event) => event.status === 'PENDING_APPROVAL').length;
+  const inProgress = events.filter((event) => ['ACCEPTED', 'PLANNED'].includes(event.status)).length;
   const organizerName = session?.user?.organizerName || '';
   const organizerStatus = session?.user?.organizerStatus || '';
   const organizerSummary = organizersAdminData?.summary || { pending: 0, approved: 0, suspended: 0 };
   const recentPending = (organizersAdminData?.organizers || []).filter((item) => item.status === 'PENDING').slice(0, 3);
   const nextEvent = events.find((event) => ['PENDING_APPROVAL', 'ACCEPTED', 'PLANNED'].includes(event.status));
+
+  function openEvents(filter) {
+    if (typeof window === 'undefined') return;
+    if (filter) window.localStorage.setItem('easy-event:eventStatusFilter', filter);
+    else window.localStorage.removeItem('easy-event:eventStatusFilter');
+    window.dispatchEvent(new CustomEvent('easy-event:navigate', { detail: { view: 'events' } }));
+  }
 
   return (
     <section className="space-y-8">
@@ -140,6 +156,12 @@ export default function Dashboard({ onSelectOrganizer }) {
               ) : null}
             </div>
           </section>
+        </div>
+      ) : isOrganizerWorkspace ? (
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+          <StatCard label="Evenements" value={events.length} helper="Voir toutes les demandes" accent="primary" onClick={() => openEvents('ALL')} />
+          <StatCard label="En cours" value={inProgress} helper="Evenements acceptes ou planifies" accent="green" onClick={() => openEvents('IN_PROGRESS')} />
+          <StatCard label="A accepter" value={toAccept} helper="Demandes en attente de validation" accent="warm" onClick={() => openEvents('PENDING_APPROVAL')} />
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
