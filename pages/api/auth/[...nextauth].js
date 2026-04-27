@@ -1,9 +1,6 @@
 import NextAuth from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import GoogleProvider from 'next-auth/providers/google';
-import { verifyCredentials } from '../../../lib/auth';
-import { prisma } from '../../../lib/prisma';
-import { ROLES } from '../../../lib/permissions';
 
 function mapSessionUser(user) {
   return {
@@ -39,6 +36,7 @@ export const authOptions = {
       async authorize(credentials) {
         try {
           if (!credentials?.email || !credentials?.password) return null;
+          const { verifyCredentials } = await import('../../../lib/auth');
 
           const user = await verifyCredentials(
             credentials.email,
@@ -65,6 +63,10 @@ export const authOptions = {
 
       const normalizedEmail = String(user?.email || '').trim().toLowerCase();
       if (!normalizedEmail) return false;
+      const [{ prisma }, { ROLES }] = await Promise.all([
+        import('../../../lib/prisma'),
+        import('../../../lib/permissions'),
+      ]);
 
       const existing = await prisma.user.findUnique({
         where: { email: normalizedEmail },
