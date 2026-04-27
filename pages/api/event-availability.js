@@ -12,6 +12,14 @@ function isoDate(date) {
   return date.toISOString().slice(0, 10);
 }
 
+function timeLabel(date) {
+  return new Date(date).toLocaleTimeString('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
 export default async function handler(req, res) {
   try {
     const session = await getServerSession(req, res, authOptions);
@@ -29,6 +37,7 @@ export default async function handler(req, res) {
     start.setHours(0, 0, 0, 0);
     const daysCount = Math.min(60, Math.max(7, Number(req.query.days || 30)));
     const capacity = dailyEventCapacity();
+    const requestedTime = req.query.time ? String(req.query.time).slice(0, 5) : null;
 
     const organizerEventIds = (
       await prisma.event.findMany({
@@ -44,9 +53,9 @@ export default async function handler(req, res) {
       date.setDate(start.getDate() + index);
       const { start: dayStart, end: dayEnd } = dayRange(date);
 
-      const [activeCount, blockingBlock] = await Promise.all([
+      const [activeCount, blockingBlocks] = await Promise.all([
         countActiveEventsForDay(date, null, organizerId),
-        prisma.planningBlock.findFirst({
+        prisma.planningBlock.findMany({
           where: {
             startAt: { lt: dayEnd },
             endAt: { gt: dayStart },
@@ -58,14 +67,24 @@ export default async function handler(req, res) {
         }),
       ]);
 
-      const unavailable = activeCount >= capacity || Boolean(blockingBlock);
+      const requestedDateTime = requestedTime ? new Date(`${isoDate(date)}T${requestedTime}:00`) : null;
+      const blocksRequestedTime = requestedDateTime
+        ? blockingBlocks.some((block) => block.startAt <= requestedDateTime && block.endAt > requestedDateTime)
+        : false;
+      const fullyBlocked = blockingBlocks.some((block) => block.startAt <= dayStart && block.endAt >= dayEnd);
+      const unavailable = activeCount >= capacity || fullyBlocked || blocksRequestedTime;
 
       days.push({
         date: isoDate(date),
         available: !unavailable,
         reservedCount: activeCount,
         capacity,
-        reason: blockingBlock ? 'Creneau bloque' : unavailable ? 'Creneau reserve' : null,
+        blockedRanges: blockingBlocks.map((block) => ({
+          start: timeLabel(block.startAt),
+          end: timeLabel(block.endAt),
+          title: block.title,
+        })),
+        reason: blocksRequestedTime || fullyBlocked ? 'Creneau bloque' : unavailable ? 'Creneau reserve' : null,
       });
     }
 

@@ -19,10 +19,17 @@ function toDate(value) {
   return d;
 }
 
+function toEventDate(body, existing = {}) {
+  if (!body.date) return existing.date;
+  const date = String(body.date).slice(0, 10);
+  const time = body.eventTime ? String(body.eventTime).slice(0, 5) : '00:00';
+  return toDate(`${date}T${time}:00`);
+}
+
 function eventPayload(body, existing = {}) {
   return {
     name: body.name != null ? String(body.name) : existing.name,
-    date: body.date ? toDate(body.date) : existing.date,
+    date: toEventDate(body, existing),
     occasionType: body.occasionType != null ? String(body.occasionType) || null : existing.occasionType,
     theme: body.theme != null ? String(body.theme) || null : existing.theme,
     location: body.location != null ? String(body.location) || null : existing.location,
@@ -61,8 +68,8 @@ async function ensureCapacity(date, excludeEventId, organizerId) {
 
   const blockingBlock = await prisma.planningBlock.findFirst({
     where: {
-      startAt: { lt: end },
-      endAt: { gt: start },
+      startAt: { lte: date },
+      endAt: { gt: date },
       OR: organizerId
         ? [
             { eventId: null },
@@ -82,7 +89,9 @@ async function ensureCapacity(date, excludeEventId, organizerId) {
 
 async function syncPlanningBlockForEvent(event, actorId) {
   if ([EVENT_STATUS.ACCEPTED, EVENT_STATUS.PLANNED].includes(event.status)) {
-    const { start, end } = dayRange(event.date);
+    const start = new Date(event.date);
+    const end = new Date(start);
+    end.setHours(end.getHours() + 2);
     const existingBlock = await prisma.planningBlock.findFirst({
       where: { eventId: event.id },
     });
@@ -94,7 +103,7 @@ async function syncPlanningBlockForEvent(event, actorId) {
           title: `Réservé - ${event.name}`,
           startAt: start,
           endAt: end,
-          reason: 'Créneau bloqué automatiquement après acceptation',
+          reason: 'Creneau evenement bloque automatiquement apres acceptation',
           createdBy: actorId,
         },
       });
@@ -104,7 +113,7 @@ async function syncPlanningBlockForEvent(event, actorId) {
           title: `Réservé - ${event.name}`,
           startAt: start,
           endAt: end,
-          reason: 'Créneau bloqué automatiquement après acceptation',
+          reason: 'Creneau evenement bloque automatiquement apres acceptation',
           eventId: event.id,
           createdBy: actorId,
         },

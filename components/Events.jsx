@@ -32,6 +32,7 @@ const initialEventState = {
   organizerId: '',
   name: '',
   date: '',
+  eventTime: '',
   occasionType: '',
   theme: '',
   location: '',
@@ -87,7 +88,22 @@ function statusTone(status) {
 }
 
 function formatDate(date) {
-  return new Date(date).toLocaleDateString('fr-FR');
+  return new Date(date).toLocaleString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function timeValue(date) {
+  if (!date) return '';
+  return new Date(date).toLocaleTimeString('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
 }
 
 function dateLabel(date) {
@@ -98,7 +114,7 @@ function dateLabel(date) {
   });
 }
 
-function AvailabilityPicker({ organizerId, selectedDate, onSelectDate }) {
+function AvailabilityPicker({ organizerId, selectedDate, selectedTime, onSelectDate }) {
   const [availability, setAvailability] = useState([]);
   const [loading, setLoading] = useState(false);
   const selectedDay = availability.find((day) => day.date === selectedDate);
@@ -112,7 +128,11 @@ function AvailabilityPicker({ organizerId, selectedDate, onSelectDate }) {
     let cancelled = false;
     setLoading(true);
 
-    fetch(`/api/event-availability?organizerId=${organizerId}&days=30`)
+    const params = new URLSearchParams({ organizerId: String(organizerId), days: '30' });
+    if (selectedDate) params.set('start', selectedDate);
+    if (selectedTime) params.set('time', selectedTime);
+
+    fetch(`/api/event-availability?${params.toString()}`)
       .then((res) => res.json())
       .then((data) => {
         if (!cancelled) setAvailability(data.days || []);
@@ -127,7 +147,7 @@ function AvailabilityPicker({ organizerId, selectedDate, onSelectDate }) {
     return () => {
       cancelled = true;
     };
-  }, [organizerId]);
+  }, [organizerId, selectedDate, selectedTime]);
 
   if (!organizerId) {
     return (
@@ -160,11 +180,20 @@ function AvailabilityPicker({ organizerId, selectedDate, onSelectDate }) {
           >
             <span className="block">{dateLabel(day.date)}</span>
             <span className={`mt-1 block text-xs ${day.available ? 'text-emerald-600' : 'text-rose-500'}`}>
-              {day.available ? 'Disponible' : day.reason || 'Reserve'}
+              {day.available ? (day.blockedRanges?.length ? 'Horaires bloques' : 'Disponible') : day.reason || 'Reserve'}
             </span>
           </button>
         ))}
       </div>
+
+      {selectedDay?.blockedRanges?.length ? (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <p className="font-semibold">Horaires deja bloques ce jour-la</p>
+          <p className="mt-1">
+            {selectedDay.blockedRanges.map((range) => `${range.start} - ${range.end}`).join(', ')}
+          </p>
+        </div>
+      ) : null}
 
       {selectedDay && !selectedDay.available ? (
         <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
@@ -592,14 +621,14 @@ function ClientReservationSection({
     setSelectedDateAvailable(true);
   }
 
-  async function checkTypedDate(date) {
-    if (!currentForm.organizerId || !date) {
+  async function checkTypedDate(date, eventTime) {
+    if (!currentForm.organizerId || !date || !eventTime) {
       setSelectedDateAvailable(true);
       return;
     }
 
     try {
-      const res = await fetch(`/api/event-availability?organizerId=${currentForm.organizerId}&start=${date}&days=1`);
+      const res = await fetch(`/api/event-availability?organizerId=${currentForm.organizerId}&start=${date}&days=1&time=${eventTime}`);
       const data = await res.json();
       setSelectedDateAvailable(Boolean(data.days?.[0]?.available));
     } catch {
@@ -608,8 +637,8 @@ function ClientReservationSection({
   }
 
   useEffect(() => {
-    checkTypedDate(currentForm.date);
-  }, [currentForm.organizerId, currentForm.date]);
+    checkTypedDate(currentForm.date, currentForm.eventTime);
+  }, [currentForm.organizerId, currentForm.date, currentForm.eventTime]);
 
   return (
     <section className="space-y-6">
@@ -713,6 +742,10 @@ function ClientReservationSection({
                 <input type="date" name="date" value={currentForm.date} onChange={handleInputChange} className="app-input w-full rounded-2xl px-4 py-3" required />
               </div>
               <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">Heure de l'evenement</label>
+                <input type="time" name="eventTime" value={currentForm.eventTime} onChange={handleInputChange} className="app-input w-full rounded-2xl px-4 py-3" required />
+              </div>
+              <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-700">Type d'occasion</label>
                 <select name="occasionType" value={currentForm.occasionType} onChange={handleInputChange} className="app-select w-full rounded-2xl px-4 py-3">
                   <option value="">Choisir</option>
@@ -745,12 +778,13 @@ function ClientReservationSection({
             <AvailabilityPicker
               organizerId={currentForm.organizerId}
               selectedDate={currentForm.date}
+              selectedTime={currentForm.eventTime}
               onSelectDate={selectAvailableDate}
             />
 
             {!selectedDateAvailable && currentForm.date ? (
               <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
-                Cette date est deja reservee pour cet organisateur. Elle ne peut pas etre soumise pour validation.
+                Ce creneau horaire est deja reserve ou bloque pour cet organisateur. Choisis une autre heure ou une autre date.
               </p>
             ) : null}
           </div>
@@ -1024,6 +1058,7 @@ export default function Events() {
       ...event,
       organizerId: event.organizerId ?? '',
       date: event.date ? String(event.date).slice(0, 10) : '',
+      eventTime: event.date ? timeValue(event.date) : '',
       guestCount: event.guestCount ?? '',
       budget: event.budget ?? '',
     });
