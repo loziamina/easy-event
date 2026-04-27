@@ -90,6 +90,91 @@ function formatDate(date) {
   return new Date(date).toLocaleDateString('fr-FR');
 }
 
+function dateLabel(date) {
+  return new Date(`${date}T00:00:00`).toLocaleDateString('fr-FR', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+  });
+}
+
+function AvailabilityPicker({ organizerId, selectedDate, onSelectDate }) {
+  const [availability, setAvailability] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const selectedDay = availability.find((day) => day.date === selectedDate);
+
+  useEffect(() => {
+    if (!organizerId) {
+      setAvailability([]);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+
+    fetch(`/api/event-availability?organizerId=${organizerId}&days=30`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled) setAvailability(data.days || []);
+      })
+      .catch(() => {
+        if (!cancelled) setAvailability([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [organizerId]);
+
+  if (!organizerId) {
+    return (
+      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+        Choisis un organisateur pour voir les creneaux disponibles.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-slate-900">Creneaux disponibles</p>
+        {loading ? <span className="text-xs font-semibold text-slate-400">Chargement...</span> : null}
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+        {availability.slice(0, 15).map((day) => (
+          <button
+            key={day.date}
+            type="button"
+            disabled={!day.available}
+            onClick={() => onSelectDate(day.date)}
+            className={`rounded-xl border px-3 py-2 text-left text-sm font-semibold transition ${
+              selectedDate === day.date
+                ? 'border-indigo-300 bg-indigo-50 text-indigo-800'
+                : day.available
+                  ? 'border-slate-200 bg-white text-slate-700 hover:border-indigo-200 hover:bg-indigo-50'
+                  : 'cursor-not-allowed border-slate-200 bg-slate-200/70 text-slate-400 opacity-70'
+            }`}
+          >
+            <span className="block">{dateLabel(day.date)}</span>
+            <span className={`mt-1 block text-xs ${day.available ? 'text-emerald-600' : 'text-rose-500'}`}>
+              {day.available ? 'Disponible' : day.reason || 'Reserve'}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {selectedDay && !selectedDay.available ? (
+        <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+          Ce creneau est deja reserve. Choisis une autre date disponible.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function StatCard({ label, value, helper, accent = 'primary' }) {
   const accents = {
     primary: 'from-indigo-50 via-violet-50 to-white border-indigo-100',
@@ -499,6 +584,33 @@ function ClientReservationSection({
   handleUpdate,
   setEditingEvent,
 }) {
+  const [selectedDateAvailable, setSelectedDateAvailable] = useState(true);
+  const canSubmitForValidation = selectedDateAvailable || !currentForm.date;
+
+  function selectAvailableDate(date) {
+    handleInputChange({ target: { name: 'date', value: date, type: 'text' } });
+    setSelectedDateAvailable(true);
+  }
+
+  async function checkTypedDate(date) {
+    if (!currentForm.organizerId || !date) {
+      setSelectedDateAvailable(true);
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/event-availability?organizerId=${currentForm.organizerId}&start=${date}&days=1`);
+      const data = await res.json();
+      setSelectedDateAvailable(Boolean(data.days?.[0]?.available));
+    } catch {
+      setSelectedDateAvailable(true);
+    }
+  }
+
+  useEffect(() => {
+    checkTypedDate(currentForm.date);
+  }, [currentForm.organizerId, currentForm.date]);
+
   return (
     <section className="space-y-6">
       <div className="page-section p-6 md:p-7">
@@ -629,6 +741,18 @@ function ClientReservationSection({
                 <input type="number" step="0.01" name="budget" value={currentForm.budget} onChange={handleInputChange} className="app-input w-full rounded-2xl px-4 py-3" placeholder="1000" min="0" />
               </div>
             </div>
+
+            <AvailabilityPicker
+              organizerId={currentForm.organizerId}
+              selectedDate={currentForm.date}
+              onSelectDate={selectAvailableDate}
+            />
+
+            {!selectedDateAvailable && currentForm.date ? (
+              <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+                Cette date est deja reservee pour cet organisateur. Elle ne peut pas etre soumise pour validation.
+              </p>
+            ) : null}
           </div>
 
           <div className="space-y-5">
@@ -661,7 +785,7 @@ function ClientReservationSection({
           <button type="submit" value="draft" className="app-button-secondary w-full rounded-2xl px-6 py-3 font-bold md:w-auto">
             Enregistrer brouillon
           </button>
-          <button type="submit" value="submit" className="app-button-primary w-full rounded-2xl px-6 py-3 font-bold md:w-auto">
+          <button type="submit" value="submit" disabled={!canSubmitForValidation} className="app-button-primary w-full rounded-2xl px-6 py-3 font-bold disabled:cursor-not-allowed disabled:opacity-50 md:w-auto">
             Soumettre pour validation
           </button>
           {editingEvent ? (
