@@ -299,22 +299,79 @@ function EventAttachments({ event, onChanged }) {
 
 function EventTimeline({ event }) {
   const history = event.history || [];
+  const [open, setOpen] = useState(false);
+  const actionLabels = {
+    EVENT_SUBMITTED: 'Demande soumise par le client',
+    EVENT_DRAFT_CREATED: 'Brouillon cree',
+    EVENT_UPDATED: 'Informations de l evenement mises a jour',
+    STATUS_CHANGED: 'Statut modifie',
+    EVENT_ASSIGNED: 'Membre du staff assigne',
+    EVENT_DELETED: 'Evenement supprime',
+    QUOTE_CREATED: 'Devis cree',
+    QUOTE_SENT: 'Devis envoye au client',
+    QUOTE_UPDATED: 'Devis modifie',
+    CHECKLIST_ITEM_CREATED: 'Tache ajoutee',
+    CHECKLIST_ITEM_DELETED: 'Tache supprimee',
+  };
+  const statusLabels = {
+    DRAFT: 'Brouillon',
+    PENDING_APPROVAL: 'En attente',
+    ACCEPTED: 'Accepte',
+    REFUSED: 'Refuse',
+    PLANNED: 'Planifie',
+    DONE: 'Termine',
+  };
+
+  function readableAction(action) {
+    return actionLabels[action] || String(action || 'Action').replaceAll('_', ' ').toLowerCase();
+  }
+
+  function readableStatus(status) {
+    return statusLabels[status] || status;
+  }
 
   return (
     <div className="mt-5 border-t border-slate-200 pt-5">
-      <p className="text-sm font-semibold text-slate-900">Historique</p>
-      <div className="mt-3 space-y-2">
-        {history.map((entry) => (
-          <div key={entry.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
-            <p className="font-semibold text-slate-900">{entry.action}</p>
-            {(entry.fromStatus || entry.toStatus) && (
-              <p className="text-slate-600">{`${entry.fromStatus || '-'} -> ${entry.toStatus || '-'}`}</p>
-            )}
-            <p className="text-xs text-slate-500">{new Date(entry.createdAt).toLocaleString('fr-FR')}</p>
-          </div>
-        ))}
-        {history.length === 0 && <p className="text-sm text-slate-500">Aucun historique.</p>}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-semibold text-slate-900">Historique interne</p>
+          <p className="mt-1 text-xs text-slate-500">Visible uniquement par l organisateur et le staff.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setOpen((current) => !current)}
+          className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+        >
+          {open ? 'Masquer' : 'Afficher'} ({history.length})
+        </button>
       </div>
+
+      {open ? (
+        <div className="mt-4 space-y-3">
+          {history.map((entry) => (
+            <div key={entry.id} className="relative rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm">
+              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="font-semibold text-slate-900">{readableAction(entry.action)}</p>
+                  {(entry.fromStatus || entry.toStatus) ? (
+                    <p className="mt-1 text-slate-600">
+                      {readableStatus(entry.fromStatus) || '-'} vers {readableStatus(entry.toStatus) || '-'}
+                    </p>
+                  ) : null}
+                </div>
+                <time className="text-xs font-medium text-slate-500">
+                  {new Date(entry.createdAt).toLocaleString('fr-FR')}
+                </time>
+              </div>
+            </div>
+          ))}
+          {history.length === 0 && (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+              Aucun historique interne pour le moment.
+            </div>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -595,7 +652,7 @@ function EventCard({ event, isStaff, fetchEvents, onStartEditing, onDelete, onSt
 
       {event.status === 'DONE' && !isStaff ? <EventReviewCard event={event} onSaved={fetchEvents} /> : null}
       <EventAttachments event={event} onChanged={fetchEvents} />
-      <EventTimeline event={event} />
+      {isStaff ? <EventTimeline event={event} /> : null}
     </article>
   );
 }
