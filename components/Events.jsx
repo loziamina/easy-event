@@ -215,6 +215,20 @@ function EventReviewCard({ event, onSaved }) {
   });
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    setForm({
+      organizerRating: event.review?.organizerRating ? String(event.review.organizerRating) : '5',
+      organizerComment: event.review?.organizerComment || '',
+      staffRating: event.review?.staffRating ? String(event.review.staffRating) : '5',
+      staffComment: event.review?.staffComment || '',
+    });
+  }, [
+    event.review?.organizerRating,
+    event.review?.organizerComment,
+    event.review?.staffRating,
+    event.review?.staffComment,
+  ]);
+
   async function submitReview(e) {
     e.preventDefault();
     setSaving(true);
@@ -231,14 +245,23 @@ function EventReviewCard({ event, onSaved }) {
         }),
       });
 
-      const text = await res.text();
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        error('Avis non enregistre', text);
+        error('Avis non enregistre', data?.message || 'Erreur avis');
         return;
       }
 
+      if (data?.review) {
+        setForm({
+          organizerRating: data.review.organizerRating ? String(data.review.organizerRating) : '5',
+          organizerComment: data.review.organizerComment || '',
+          staffRating: data.review.staffRating ? String(data.review.staffRating) : '5',
+          staffComment: data.review.staffComment || '',
+        });
+      }
+
       success(event.review ? 'Avis mis a jour' : 'Avis envoye');
-      onSaved?.();
+      await onSaved?.();
     } finally {
       setSaving(false);
     }
