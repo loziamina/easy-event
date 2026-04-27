@@ -3,6 +3,7 @@ import { authOptions } from './auth/[...nextauth]';
 import { prisma } from '../../lib/prisma';
 import { writeAudit } from '../../lib/audit';
 import { notifyOrganizerUsers } from '../../lib/notifications';
+import { canManageOperations, isPlatformAdmin } from '../../lib/permissions';
 
 function clampRating(value) {
   const number = Number(value);
@@ -76,18 +77,87 @@ export default async function handler(req, res) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    if (session.user.role !== 'CLIENT') {
-      return res.status(403).json({ message: 'Only clients can leave a review' });
-    }
-
-    if (!['POST', 'PUT'].includes(req.method)) {
-      res.setHeader('Allow', ['GET', 'POST', 'PUT']);
+    if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+      res.setHeader('Allow', ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
       return res.status(405).json({ message: 'Method not allowed' });
     }
 
     const eventId = Number(req.body?.eventId);
-    if (!eventId) {
+    const reviewId = Number(req.body?.reviewId || req.body?.id);
+    if (!eventId && !reviewId) {
       return res.status(400).json({ message: 'eventId required' });
+    }
+
+    const reviewLookup = reviewId
+      ? { id: reviewId }
+      : { eventId };
+    const existingReview = await prisma.review.findUnique({
+      where: reviewLookup,
+      include: {
+        event: true,
+        author: { select: { id: true, name: true, avatarUrl: true } },
+        reviewedStaff: { select: { id: true, name: true, avatarUrl: true } },
+      },
+    });
+    const isStaff = canManageOperations(session.user);
+    const platformAdmin = isPlatformAdmin(session.user);
+    const actorOrganizerId = session.user.organizerId ? Number(session.user.organizerId) : null;
+
+    if (['PATCH', 'DELETE'].includes(req.method)) {
+      if (!existingReview) return res.status(404).json({ message: 'Review not found' });
+
+      const isAuthor = existingReview.authorId === Number(session.user.id);
+      const canModerate = isStaff && (platformAdmin || existingReview.organizerId === actorOrganizerId);
+      if (!isAuthor && !canModerate) return res.status(403).json({ message: 'Forbidden' });
+
+      if (req.method === 'PATCH') {
+        if (!canModerate) return res.status(403).json({ message: 'Only organizer staff can moderate comments' });
+        const action = String(req.body?.action || '');
+        const data = {};
+        if (action === 'deleteOrganizerComment') data.organizerComment = null;
+        else if (action === 'deleteStaffComment') data.staffComment = null;
+        else if (action === 'deleteComments') {
+          data.organizerComment = null;
+          data.staffComment = null;
+        } else {
+          return res.status(400).json({ message: 'Invalid action' });
+        }
+
+        const review = await prisma.review.update({
+          where: { id: existingReview.id },
+          data,
+          include: {
+            author: { select: { id: true, name: true, avatarUrl: true } },
+            reviewedStaff: { select: { id: true, name: true, avatarUrl: true } },
+            event: { select: { id: true, name: true, date: true } },
+          },
+        });
+
+        await writeAudit({
+          actorId: session.user.id,
+          action: 'REVIEW_COMMENT_DELETED',
+          entity: 'Review',
+          entityId: review.id,
+          details: { action },
+        });
+
+        return res.status(200).json({ review: mapReview(review) });
+      }
+
+      await prisma.review.delete({ where: { id: existingReview.id } });
+      await writeAudit({
+        actorId: session.user.id,
+        action: canModerate ? 'REVIEW_MODERATED_DELETED' : 'REVIEW_DELETED',
+        entity: 'Review',
+        entityId: existingReview.id,
+        details: { eventId: existingReview.eventId, organizerId: existingReview.organizerId },
+      });
+
+      return res.status(200).json({ ok: true });
+    }
+
+    if (session.user.role !== 'CLIENT') {
+      return res.status(403).json({ message: 'Only clients can leave a review' });
     }
 
     const event = await prisma.event.findFirst({

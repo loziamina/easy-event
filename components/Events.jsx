@@ -438,6 +438,30 @@ function EventReviewCard({ event, onSaved }) {
     }
   }
 
+  async function deleteReview() {
+    if (!event.review?.id) return;
+    const res = await fetch('/api/reviews', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reviewId: event.review.id }),
+    });
+
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      error('Suppression impossible', data?.message || "L'avis n'a pas pu etre supprime.");
+      return;
+    }
+
+    setForm({
+      organizerRating: '5',
+      organizerComment: '',
+      staffRating: '5',
+      staffComment: '',
+    });
+    success('Avis supprime');
+    await onSaved?.();
+  }
+
   return (
     <div className="mt-5 border-t border-slate-200 pt-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -510,7 +534,61 @@ function EventReviewCard({ event, onSaved }) {
         <button type="submit" disabled={saving} className="app-button-primary rounded-xl px-4 py-3 font-semibold disabled:opacity-60">
           {saving ? 'Enregistrement...' : event.review ? 'Mettre a jour mon avis' : 'Publier mon avis'}
         </button>
+        {event.review ? (
+          <button type="button" onClick={deleteReview} disabled={saving} className="ml-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-60">
+            Supprimer mon avis
+          </button>
+        ) : null}
       </form>
+    </div>
+  );
+}
+
+function StaffReviewModeration({ event, onChanged }) {
+  const { success, error } = useToast();
+  const review = event.review;
+  if (!review) return null;
+
+  async function reviewAction(method, payload, successMessage) {
+    const res = await fetch('/api/reviews', {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reviewId: review.id, ...payload }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      error('Action impossible', data?.message || "L'avis n'a pas pu etre modifie.");
+      return;
+    }
+    success(successMessage);
+    await onChanged?.();
+  }
+
+  return (
+    <div className="mt-5 border-t border-slate-200 pt-5">
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">Avis client</p>
+            <p className="mt-1 text-sm text-slate-600">
+              Note organisateur : {review.organizerRating}/5
+              {review.staffRating ? ` - Note staff : ${review.staffRating}/5` : ''}
+            </p>
+            {review.organizerComment ? <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700">{review.organizerComment}</p> : null}
+            {review.staffComment ? <p className="mt-2 whitespace-pre-wrap text-sm text-slate-500">{review.staffComment}</p> : null}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(review.organizerComment || review.staffComment) ? (
+              <button type="button" onClick={() => reviewAction('PATCH', { action: 'deleteComments' }, 'Commentaire supprime')} className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100">
+                Supprimer commentaire
+              </button>
+            ) : null}
+            <button type="button" onClick={() => reviewAction('DELETE', {}, 'Avis supprime')} className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100">
+              Supprimer avis
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -651,6 +729,7 @@ function EventCard({ event, isStaff, fetchEvents, onStartEditing, onDelete, onSt
       </div>
 
       {event.status === 'DONE' && !isStaff ? <EventReviewCard event={event} onSaved={fetchEvents} /> : null}
+      {isStaff ? <StaffReviewModeration event={event} onChanged={fetchEvents} /> : null}
       <EventAttachments event={event} onChanged={fetchEvents} />
       {isStaff ? <EventTimeline event={event} /> : null}
     </article>
