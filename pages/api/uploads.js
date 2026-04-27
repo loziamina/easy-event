@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { createClient } from '@supabase/supabase-js';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from './auth/[...nextauth]';
 
@@ -25,6 +26,30 @@ function safeFolder(category) {
   if (category === 'portfolio-image') return 'portfolio-images';
   if (category === 'portfolio-video') return 'portfolio-videos';
   return 'misc';
+}
+
+async function uploadToSupabase({ folder, finalName, buffer, mime }) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) return null;
+
+  const supabase = createClient(supabaseUrl, serviceKey, {
+    auth: { persistSession: false },
+  });
+  const objectPath = `${folder}/${finalName}`;
+  const { error } = await supabase.storage
+    .from('uploads')
+    .upload(objectPath, buffer, {
+      contentType: mime,
+      upsert: false,
+    });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const { data } = supabase.storage.from('uploads').getPublicUrl(objectPath);
+  return data.publicUrl;
 }
 
 export default async function handler(req, res) {
@@ -56,16 +81,31 @@ export default async function handler(req, res) {
       return res.status(400).json({ message: 'File too large' });
     }
 
-    const folder = safeFolder(category);
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', folder);
-    await fs.mkdir(uploadDir, { recursive: true });
-
     const safeName = String(filename || 'media')
       .toLowerCase()
       .replace(/[^a-z0-9._-]+/g, '-')
       .replace(/^-+|-+$/g, '')
       .slice(0, 40) || 'media';
+    const folder = safeFolder(category);
     const finalName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName}.${ext}`;
+
+    const publicUrl = await uploadToSupabase({
+      folder,
+      finalName,
+      buffer,
+      mime: parsed.mime,
+    });
+
+    if (publicUrl) {
+      return res.status(201).json({
+        url: publicUrl,
+        mime: parsed.mime,
+        size: buffer.length,
+      });
+    }
+
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads', folder);
+    await fs.mkdir(uploadDir, { recursive: true });
     const fullPath = path.join(uploadDir, finalName);
     await fs.writeFile(fullPath, buffer);
 
