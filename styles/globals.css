@@ -55,6 +55,52 @@ textarea:focus {
   box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.12);
 }
 
+input[type="file"] {
+  width: 100%;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+input[type="file"]::file-selector-button {
+  margin-right: 0.9rem;
+  border: 1px solid rgba(165, 180, 252, 0.55);
+  border-radius: 0.9rem;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.12) 0%, rgba(167, 139, 250, 0.14) 100%);
+  color: #4c51bf;
+  padding: 0.65rem 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+}
+
+input[type="file"]::file-selector-button:hover {
+  border-color: rgba(102, 126, 234, 0.45);
+  background: var(--gradient-primary);
+  color: white;
+  box-shadow: var(--shadow-md);
+}
+
+input[type="file"]::-webkit-file-upload-button {
+  margin-right: 0.9rem;
+  border: 1px solid rgba(165, 180, 252, 0.55);
+  border-radius: 0.9rem;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.12) 0%, rgba(167, 139, 250, 0.14) 100%);
+  color: #4c51bf;
+  padding: 0.65rem 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+}
+
+input[type="file"]::-webkit-file-upload-button:hover {
+  border-color: rgba(102, 126, 234, 0.45);
+  background: var(--gradient-primary);
+  color: white;
+  box-shadow: var(--shadow-md);
+}
+
 .app-gradient-text {
   background: var(--gradient-primary);
   -webkit-background-clip: text;
