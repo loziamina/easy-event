@@ -234,7 +234,6 @@ export default function Chat({ clientId }) {
   return (
     <div className="flex h-full bg-white">
       <aside className="w-80 border-r border-slate-200 bg-white overflow-y-auto">
-        <aside className="w-80 border-r border-slate-200 bg-white overflow-y-auto">
           <div className="p-4 border-b border-slate-200 space-y-3">
             <div>
               <h3 className="font-bold">
