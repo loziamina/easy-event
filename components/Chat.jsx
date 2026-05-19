@@ -12,6 +12,7 @@ function linkLabel(message) {
 }
 
 function modeLabel(mode) {
+  if (mode === 'support') return 'Support';
   return mode === 'team' ? 'Equipe' : 'Clients';
 }
 
@@ -21,6 +22,7 @@ export default function Chat({ clientId }) {
   const { error, success, info } = useToast();
   const isPlatformAdmin = role === 'PLATFORM_ADMIN';
   const isOrganizerUser = ['ORGANIZER_OWNER', 'ORGANIZER_STAFF'].includes(role);
+  const isOrganizerOwner = role === 'ORGANIZER_OWNER';
   const isClient = role === 'CLIENT';
 
   const [mode, setMode] = useState(isOrganizerUser ? 'clients' : isPlatformAdmin ? 'support' : 'client');
@@ -38,7 +40,7 @@ export default function Chat({ clientId }) {
 
     if (isPlatformAdmin) {
       setMode('support');
-    } else if (isOrganizerUser && storedMode && ['clients', 'team'].includes(storedMode)) {
+    } else if (isOrganizerUser && storedMode && ['clients', 'team', ...(isOrganizerOwner ? ['support'] : [])].includes(storedMode)) {
       setMode(storedMode);
     }
 
@@ -48,15 +50,17 @@ export default function Chat({ clientId }) {
     if (storedConversationId) {
       setSelectedConversationId(storedConversationId);
     }
-  }, [isPlatformAdmin, isOrganizerUser]);
+  }, [isPlatformAdmin, isOrganizerUser, isOrganizerOwner]);
 
   const activeMode = isPlatformAdmin ? 'support' : mode;
   const query = useMemo(() => {
     if (activeMode === 'team') return '/api/team-conversations?markRead=false';
-    if (activeMode === 'support') return '/api/conversations?markRead=false';
+    if (activeMode === 'support') {
+      return isPlatformAdmin ? '/api/conversations?markRead=false' : '/api/conversations?support=true&markRead=false';
+    }
     if (isClient) return '/api/conversations';
     return '/api/conversations?markRead=false';
-  }, [activeMode, isClient]);
+  }, [activeMode, isClient, isPlatformAdmin]);
 
   const { data, mutate, isLoading } = useSWR(query, fetcher, { refreshInterval: 5000 });
   const { data: templatesData } = useSWR(activeMode === 'clients' && isOrganizerUser ? '/api/chat-templates' : null, fetcher);
@@ -170,6 +174,7 @@ export default function Chat({ clientId }) {
         }
       : {
           text: finalText,
+          support: activeMode === 'support' && !isPlatformAdmin,
           conversationId: isClient ? conv?.id : undefined,
           clientId: !isClient ? activeClientId : undefined,
           attachmentUrl: payload.attachmentUrl ?? attachment.url,
@@ -249,8 +254,8 @@ export default function Chat({ clientId }) {
             </div>
 
             {isOrganizerUser && (
-              <div className="grid grid-cols-2 gap-2">
-                {['clients', 'team'].map((value) => (
+              <div className={`grid gap-2 ${isOrganizerOwner ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                {['clients', 'team', ...(isOrganizerOwner ? ['support'] : [])].map((value) => (
                   <button
                     key={value}
                     onClick={() => {
@@ -274,6 +279,8 @@ export default function Chat({ clientId }) {
               placeholder={
                 isPlatformAdmin
                   ? 'Rechercher organisateur, email, message...'
+                  : activeMode === 'support'
+                    ? 'Rechercher support, ticket, message...'
                   : activeMode === 'team'
                     ? 'Rechercher membre equipe...'
                     : 'Rechercher client, evenement, message...'
@@ -360,7 +367,9 @@ export default function Chat({ clientId }) {
                 ? `${conv.event.name} · ${new Date(conv.event.date).toLocaleDateString('fr-FR')}`
                 : activeMode === 'team'
                   ? 'Communication interne de l equipe'
-                  : conv?.organizer?.name || 'Conversation'}
+                  : activeMode === 'support'
+                    ? 'Support plateforme'
+                    : conv?.organizer?.name || 'Conversation'}
           </p>
           {activeMode === 'clients' && conv?.event?.statusText ? (
             <p className="text-xs text-slate-500">Statut evenement: {conv.event.statusText}</p>
@@ -485,7 +494,7 @@ export default function Chat({ clientId }) {
                   send();
                 }
               }}
-              placeholder={activeMode === 'team' ? 'Ecrire a un membre de l equipe...' : 'Ecrire un message...'}
+              placeholder={activeMode === 'team' ? 'Ecrire a un membre de l equipe...' : activeMode === 'support' ? 'Ecrire au support plateforme...' : 'Ecrire un message...'}
               className="w-full p-3 border border-slate-200 rounded-full focus:outline-none focus:ring-2 focus:ring-violet-500"
             />
             <button
