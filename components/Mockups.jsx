@@ -35,6 +35,10 @@ function isVisual(url, fileType) {
   return fileType === 'image' || /\.(png|jpe?g|webp|gif)$/i.test(String(url || ''));
 }
 
+function isVideo(url, fileType) {
+  return fileType === 'video' || /\.(mp4|webm|mov)$/i.test(String(url || ''));
+}
+
 function StatCard({ label, value, helper, accent = 'primary' }) {
   const accents = {
     primary: 'from-indigo-50 via-violet-50 to-white border-indigo-100',
@@ -98,9 +102,11 @@ function MockupCard({ mockup, isStaff, onAction, onDelete }) {
         <div className="rounded-[1.4rem] border border-slate-200 bg-white p-4">
           {isVisual(mockup.url, mockup.fileType) ? (
             <img src={mockup.url} alt={mockup.title} className="max-h-[460px] w-full rounded-[1.2rem] border border-slate-200 object-contain bg-slate-50" />
+          ) : isVideo(mockup.url, mockup.fileType) ? (
+            <video src={mockup.url} controls className="max-h-[460px] w-full rounded-[1.2rem] border border-slate-200 bg-slate-950" />
           ) : (
             <a href={mockup.url} target="_blank" rel="noreferrer" className="block rounded-[1.2rem] border border-indigo-100 bg-indigo-50 p-6 font-semibold text-indigo-700">
-              Ouvrir la maquette PDF / Canva
+              Ouvrir la maquette PDF / Canva / fichier
             </a>
           )}
         </div>
@@ -183,6 +189,7 @@ export default function Mockups({ navTarget }) {
   const changesCount = mockups.filter((item) => item.status === 'CHANGES_REQUESTED').length;
 
   const [form, setForm] = useState(emptyForm);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
   const { success, error, info } = useToast();
 
   useEffect(() => {
@@ -193,6 +200,56 @@ export default function Mockups({ navTarget }) {
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function uploadMediaFile(file) {
+    if (!file) return;
+    const isVideoFile = file.type.startsWith('video/');
+    const isImageFile = file.type.startsWith('image/');
+
+    if (!isVideoFile && !isImageFile) {
+      error('Upload impossible', 'Ajoute une image ou une video.');
+      return;
+    }
+
+    setUploadingMedia(true);
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      const res = await fetch('/api/uploads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dataUrl,
+          filename: file.name,
+          category: isVideoFile ? 'portfolio-video' : 'portfolio-image',
+        }),
+      });
+
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload.message || payload.error || 'Upload impossible');
+      }
+
+      setForm((current) => ({
+        ...current,
+        url: payload.url,
+        fileType: isVideoFile ? 'video' : 'image',
+      }));
+      success(isVideoFile ? 'Video uploadee' : 'Photo uploadee');
+    } catch (uploadError) {
+      error('Upload impossible', uploadError.message);
+    } finally {
+      setUploadingMedia(false);
+    }
   }
 
   async function uploadMockup(e) {
@@ -277,7 +334,22 @@ export default function Mockups({ navTarget }) {
             <input className="app-input rounded-xl px-4 py-3" placeholder="Titre maquette" value={form.title} onChange={(e) => updateField('title', e.target.value)} required />
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-slate-700">Photo, video, PDF ou lien Canva</span>
-              <input className="app-input w-full rounded-xl px-4 py-3" placeholder="URL photo / video / PDF / Canva" value={form.url} onChange={(e) => updateField('url', e.target.value)} required />
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input className="app-input min-w-0 flex-1 rounded-xl px-4 py-3" placeholder="URL photo / video / PDF / Canva" value={form.url} onChange={(e) => updateField('url', e.target.value)} required />
+                <label className="app-button-secondary flex cursor-pointer items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold">
+                  {uploadingMedia ? 'Upload...' : 'Uploader'}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
+                    className="sr-only"
+                    disabled={uploadingMedia}
+                    onChange={(e) => {
+                      uploadMediaFile(e.target.files?.[0]);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+              </div>
             </label>
             <select className="app-select rounded-xl px-4 py-3" value={form.fileType} onChange={(e) => updateField('fileType', e.target.value)}>
               <option value="image">Image</option>
