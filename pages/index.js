@@ -29,6 +29,7 @@ export default function Home() {
   const canUseOrganizerWorkspace = canManageOrganizerWorkspace(session?.user);
   const canManageStaff = ['PLATFORM_ADMIN', 'ORGANIZER_OWNER'].includes(role);
   const canManageOrganizers = role === 'PLATFORM_ADMIN';
+  const canUseTickets = role === 'PLATFORM_ADMIN' || role === 'ORGANIZER_OWNER';
 
   function navigateTo(nextView, options = {}) {
     if (!nextView || nextView === view) return;
@@ -129,7 +130,7 @@ export default function Home() {
             {view === 'mockups' && role !== 'PLATFORM_ADMIN' && <Mockups navTarget={navTarget} />}
             {view === 'planning' && canUseOrganizerWorkspace && <Planning />}
             {view === 'organizers' && canManageOrganizers && <OrganizerManagement />}
-            {view === 'tickets' && (role === 'PLATFORM_ADMIN' || canUseOrganizerWorkspace) && <Tickets navTarget={navTarget} />}
+            {view === 'tickets' && canUseTickets && <Tickets navTarget={navTarget} />}
             {view === 'profile' && <Profile />}
             {view === 'staff' && canManageStaff && <StaffManagement />}
             {view === 'audit' && ['PLATFORM_ADMIN', 'ORGANIZER_OWNER', 'ORGANIZER_STAFF'].includes(role) && <AuditLog />}

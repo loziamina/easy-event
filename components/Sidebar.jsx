@@ -10,6 +10,7 @@ export default function Sidebar({ current, onChange, isAuthed, role }) {
   const canUseOrganizerWorkspace = ['ORGANIZER_OWNER', 'ORGANIZER_STAFF'].includes(role);
   const canManageStaff = ['PLATFORM_ADMIN', 'ORGANIZER_OWNER'].includes(role);
   const canManageOrganizers = role === 'PLATFORM_ADMIN';
+  const canUseTickets = isPlatformAdmin || role === 'ORGANIZER_OWNER';
   const { data } = useSWR(isAuthed ? '/api/notifications' : null, fetcher, { refreshInterval: 5000 });
   const unreadMessages = data?.unreadMessages || 0;
   const quoteNotifications = (data?.notifications || []).filter((notification) =>
@@ -24,7 +25,7 @@ export default function Sidebar({ current, onChange, isAuthed, role }) {
     canUseOrganizerWorkspace || role === 'CLIENT' ? { id: 'mockups', label: 'Maquettes' } : null,
     canUseOrganizerWorkspace ? { id: 'planning', label: 'Planning' } : null,
     canManageOrganizers ? { id: 'organizers', label: 'Organisateurs' } : null,
-    isPlatformAdmin || canUseOrganizerWorkspace ? { id: 'tickets', label: isPlatformAdmin ? 'Issues' : 'Tickets' } : null,
+    canUseTickets ? { id: 'tickets', label: isPlatformAdmin ? 'Issues' : 'Tickets' } : null,
     { id: 'chat', label: isPlatformAdmin ? 'Support organisateurs' : 'Messages' },
     { id: 'profile', label: 'Profil' },
     canManageStaff ? { id: 'staff', label: 'Equipe' } : null,

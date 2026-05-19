@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from './auth/[...nextauth]';
 import { prisma } from '../../lib/prisma';
-import { isPlatformAdmin, isOrganizerUser } from '../../lib/permissions';
+import { isOrganizerOwner, isPlatformAdmin } from '../../lib/permissions';
 import { writeAudit } from '../../lib/audit';
 
 function mapTicket(ticket) {
@@ -45,7 +45,7 @@ export default async function handler(req, res) {
   const uid = Number(session.user.id);
   const role = session.user.role;
   const platformAdmin = isPlatformAdmin(session.user);
-  const organizerUser = isOrganizerUser(session.user);
+  const organizerOwner = isOrganizerOwner(session.user);
   const organizerId = session.user.organizerId ? Number(session.user.organizerId) : null;
 
   try {
@@ -54,7 +54,7 @@ export default async function handler(req, res) {
 
       const where = platformAdmin
         ? (status ? { status } : {})
-        : organizerUser
+        : organizerOwner
           ? {
               organizerId: organizerId || -1,
               ...(status ? { status } : {}),
@@ -91,8 +91,8 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-      if (!organizerUser || !organizerId) {
-        return res.status(403).json({ message: 'Only organizer accounts can create tickets' });
+      if (!organizerOwner || !organizerId) {
+        return res.status(403).json({ message: 'Only organizer owners can create tickets' });
       }
 
       const title = String(req.body?.title || '').trim();
