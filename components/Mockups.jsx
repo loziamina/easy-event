@@ -221,6 +221,15 @@ export default function Mockups({ navTarget }) {
       return;
     }
 
+    const maxBytes = isVideoFile ? 25 * 1024 * 1024 : 6 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      error(
+        'Upload impossible',
+        isVideoFile ? 'La video ne doit pas depasser 25 Mo.' : 'La photo ne doit pas depasser 6 Mo.'
+      );
+      return;
+    }
+
     setUploadingMedia(true);
     try {
       const dataUrl = await fileToDataUrl(file);

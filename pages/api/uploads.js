@@ -14,6 +14,14 @@ const MIME_TO_EXT = {
   'video/quicktime': 'mov',
 };
 
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '40mb',
+    },
+  },
+};
+
 function parseDataUrl(dataUrl) {
   const match = String(dataUrl || '').match(/^data:([^;]+);base64,(.+)$/);
   if (!match) return null;
@@ -78,7 +86,11 @@ export default async function handler(req, res) {
     const buffer = Buffer.from(parsed.base64, 'base64');
     const maxBytes = category === 'portfolio-video' ? 25 * 1024 * 1024 : 6 * 1024 * 1024;
     if (buffer.length > maxBytes) {
-      return res.status(400).json({ message: 'File too large' });
+      return res.status(400).json({
+        message: category === 'portfolio-video'
+          ? 'Video too large. Max size is 25 MB.'
+          : 'Image too large. Max size is 6 MB.',
+      });
     }
 
     const safeName = String(filename || 'media')
