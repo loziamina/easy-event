@@ -8,7 +8,17 @@ const emptyBlock = { title: '', startAt: '', endAt: '', reason: '' };
 const emptyTask = { title: '', category: 'Installation', dueAt: '', assignedToId: '' };
 
 function isoDate(date) {
-  return date.toISOString().slice(0, 10);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function parseDateInput(value) {
+  if (!value) return new Date();
+  const [year, month, day] = String(value).split('-').map(Number);
+  if (!year || !month || !day) return new Date(value);
+  return new Date(year, month - 1, day);
 }
 
 function startOfWeek(date) {
@@ -26,7 +36,7 @@ function addDays(date, days) {
 }
 
 function viewRange(anchor, view) {
-  const date = new Date(anchor);
+  const date = parseDateInput(anchor);
   if (view === 'day') {
     const start = new Date(date);
     start.setHours(0, 0, 0, 0);
