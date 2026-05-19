@@ -123,8 +123,8 @@ function mapConversation(conversation, viewerRole) {
     contactName = conversation.organizer?.name || conversation.client?.name || conversation.client?.email || 'Organisateur';
     contactEmail = conversation.client?.email || '';
   } else if (viewerRole === 'CLIENT') {
-    contactName = conversation.organizer?.name || 'Organisateur';
-    contactEmail = '';
+    contactName = conversation.admin?.name || conversation.admin?.email || conversation.organizer?.name || 'Organisateur';
+    contactEmail = conversation.admin?.email || '';
   } else if (kind === 'PLATFORM_SUPPORT') {
     contactName = 'Support EasyEvent';
     contactEmail = conversation.admin?.email || '';
@@ -180,6 +180,36 @@ function mapSyntheticSupportConversation({ clientUser, organizer, admin }, viewe
         }
       : null,
     event: null,
+    messages: [],
+  };
+}
+
+function mapSyntheticClientConversation({ clientUser, organizer, event, staffUser }) {
+  return {
+    id: `client-${clientUser.id}-${staffUser.id}`,
+    type: 'CLIENT_SERVICE',
+    contactName: clientUser.name || clientUser.email || 'Client',
+    contactEmail: clientUser.email || '',
+    unreadCount: 0,
+    messageCount: 0,
+    lastMessageAt: event?.updatedAt || event?.createdAt || clientUser.createdAt,
+    clientId: clientUser.id,
+    organizer: organizer
+      ? {
+          id: organizer.id,
+          name: organizer.name,
+          status: organizer.status,
+        }
+      : null,
+    event: event
+      ? {
+          id: event.id,
+          name: event.name,
+          date: event.date,
+          status: event.status,
+          statusText: event.statusText,
+        }
+      : null,
     messages: [],
   };
 }
@@ -278,26 +308,15 @@ export default async function handler(req, res) {
         const markRead = req.query.markRead !== 'false';
         const visibleEventScope = staffAssignedOnly
           ? { organizerId, assignedStaffId: uid }
-          : organizerOwner
-            ? { organizerId, assignedStaffId: null }
-            : { organizerId };
-
-        const where = {
-          organizerId: organizerId || undefined,
-          clientId: clientId || undefined,
-          client: {
-            role: 'CLIENT',
-            events: {
-              some: {
-                ...visibleEventScope,
-                status: { in: ['PENDING_APPROVAL', 'ACCEPTED', 'PLANNED', 'DONE'] },
-              },
-            },
-          },
-        };
+          : { organizerId };
 
         const convs = await prisma.conversation.findMany({
-          where,
+          where: {
+            organizerId: organizerId || undefined,
+            adminId: uid,
+            clientId: clientId || undefined,
+            client: { role: 'CLIENT' },
+          },
           include: {
             client: {
               include: {
@@ -318,6 +337,29 @@ export default async function handler(req, res) {
           orderBy: { updatedAt: 'desc' },
         });
 
+        const eventsForConversationStart = await prisma.event.findMany({
+          where: {
+            ...visibleEventScope,
+            ownerId: clientId || undefined,
+            status: { in: ['PENDING_APPROVAL', 'ACCEPTED', 'PLANNED', 'DONE'] },
+          },
+          include: {
+            owner: true,
+            organizer: true,
+          },
+          orderBy: { date: 'desc' },
+        });
+
+        const existingClientIds = new Set(convs.map((item) => item.clientId));
+        const syntheticRows = eventsForConversationStart
+          .filter((event) => event.owner && !existingClientIds.has(event.ownerId))
+          .map((event) => mapSyntheticClientConversation({
+            clientUser: event.owner,
+            organizer: event.organizer,
+            event,
+            staffUser: session.user,
+          }));
+
         if (clientId && markRead && convs[0]) {
           await prisma.conversation.update({
             where: { id: convs[0].id },
@@ -329,7 +371,7 @@ export default async function handler(req, res) {
           });
         }
 
-        return res.status(200).json({ convs: convs.map((item) => mapConversation(item, role)) });
+        return res.status(200).json({ convs: [...convs.map((item) => mapConversation(item, role)), ...syntheticRows] });
       }
 
       const admin = await getAdminUser();
@@ -337,9 +379,10 @@ export default async function handler(req, res) {
         return res.status(500).json({ message: 'Admin not found' });
       }
 
-      const conv = await prisma.conversation.findUnique({
+      const convs = await prisma.conversation.findMany({
         where: {
-          clientId_adminId: { clientId: uid, adminId: admin.id },
+          clientId: uid,
+          client: { role: 'CLIENT' },
         },
         include: {
           messages: { orderBy: { createdAt: 'asc' } },
@@ -347,25 +390,18 @@ export default async function handler(req, res) {
           organizer: true,
           client: { include: { organizer: true } },
         },
+        orderBy: { updatedAt: 'desc' },
       });
 
-      if (!conv) return res.json({ convs: [] });
+      if (convs.length === 0) return res.json({ convs: [] });
 
-      await prisma.conversation.update({
-        where: { id: conv.id },
-        data: { clientLastReadAt: new Date() },
-      });
-      await prisma.message.updateMany({
-        where: { conversationId: conv.id, sender: { not: 'CLIENT' }, readAt: null },
-        data: { readAt: new Date() },
-      });
-
-      return res.status(200).json({ convs: [mapConversation(conv, 'CLIENT')] });
+      return res.status(200).json({ convs: convs.map((conv) => mapConversation(conv, 'CLIENT')) });
     }
 
       if (req.method === 'POST') {
       const {
         text,
+        conversationId,
         clientId,
         attachmentUrl,
         attachmentName,
@@ -385,6 +421,7 @@ export default async function handler(req, res) {
 
       let effectiveClientId = uid;
       let effectiveOrganizerId = organizerId;
+      let conv;
 
       if (platformAdmin) {
         effectiveClientId = Number(clientId);
@@ -410,24 +447,42 @@ export default async function handler(req, res) {
           });
           if (!assignedEvent) return res.status(403).json({ message: 'Forbidden' });
         } else if (organizerOwner) {
-          const unassignedEvent = await prisma.event.findFirst({
+          const organizationEvent = await prisma.event.findFirst({
             where: {
               ownerId: effectiveClientId,
               organizerId,
-              assignedStaffId: null,
               status: { in: ['PENDING_APPROVAL', 'ACCEPTED', 'PLANNED', 'DONE'] },
             },
             select: { id: true },
           });
-          if (!unassignedEvent) {
-            return res.status(403).json({ message: 'Conversation already assigned to staff' });
+          if (!organizationEvent) {
+            return res.status(403).json({ message: 'Forbidden' });
           }
         }
+      } else if (!supportMode) {
+        const parsedConversationId = Number(conversationId);
+        if (!parsedConversationId) {
+          return res.status(400).json({ message: 'conversationId required for client reply' });
+        }
+        const existingClientConversation = await prisma.conversation.findFirst({
+          where: {
+            id: parsedConversationId,
+            clientId: uid,
+            client: { role: 'CLIENT' },
+          },
+        });
+        if (!existingClientConversation) return res.status(404).json({ message: 'Conversation not found' });
+        conv = await prisma.conversation.update({
+          where: { id: existingClientConversation.id },
+          data: {
+            updatedAt: new Date(),
+            clientLastReadAt: new Date(),
+          },
+        });
+        effectiveOrganizerId = existingClientConversation.organizerId;
       }
 
-      let conv;
-
-      if (platformAdmin || supportMode) {
+      if (!conv && (platformAdmin || supportMode)) {
         if (supportMode && !platformAdmin) {
           const allowed = await hasActiveSupportTicket({ requesterId: uid, organizerId: effectiveOrganizerId });
           if (!allowed) {
@@ -454,10 +509,10 @@ export default async function handler(req, res) {
             platformAdmin,
           });
         }
-      } else {
+      } else if (!conv) {
         conv = await prisma.conversation.upsert({
           where: {
-            clientId_adminId: { clientId: effectiveClientId, adminId: admin.id },
+            clientId_adminId: { clientId: effectiveClientId, adminId: uid },
           },
           update: {
             updatedAt: new Date(),
@@ -466,7 +521,7 @@ export default async function handler(req, res) {
           },
           create: {
             clientId: effectiveClientId,
-            adminId: admin.id,
+            adminId: uid,
             organizerId: effectiveOrganizerId || null,
             staffLastReadAt: new Date(),
             clientLastReadAt: null,
@@ -530,7 +585,7 @@ export default async function handler(req, res) {
       } else {
         await prisma.notification.create({
           data: {
-            role: role || 'ORGANIZER_STAFF',
+            userId: conv.adminId,
             type: 'MESSAGE',
             title: 'Nouveau message client',
             body: String(text).slice(0, 180),
@@ -563,16 +618,17 @@ export default async function handler(req, res) {
 
       const kind = conv.client?.role === 'CLIENT' ? 'CLIENT_SERVICE' : 'PLATFORM_SUPPORT';
       if (!platformAdmin && !isStaff && conv.clientId !== uid) return res.status(403).json({ message: 'Forbidden' });
+      if (!platformAdmin && isStaff && kind === 'CLIENT_SERVICE' && conv.adminId !== uid) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
       if (staffAssignedOnly && kind === 'CLIENT_SERVICE') {
         const hasAssignedEvent = conv.client?.events?.some((event) => (
           Number(event.organizerId) === organizerId && Number(event.assignedStaffId) === uid
         ));
         if (!hasAssignedEvent) return res.status(403).json({ message: 'Forbidden' });
       } else if (organizerOwner && kind === 'CLIENT_SERVICE') {
-        const hasUnassignedEvent = conv.client?.events?.some((event) => (
-          Number(event.organizerId) === organizerId && event.assignedStaffId == null
-        ));
-        if (!hasUnassignedEvent) return res.status(403).json({ message: 'Conversation already assigned to staff' });
+        const hasOrganizationEvent = conv.client?.events?.some((event) => Number(event.organizerId) === organizerId);
+        if (!hasOrganizationEvent) return res.status(403).json({ message: 'Forbidden' });
       }
 
       if (platformAdmin || (isStaff && kind === 'CLIENT_SERVICE')) {

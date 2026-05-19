@@ -89,6 +89,7 @@ export default async function handler(req, res) {
                   },
                   {
                     organizerId,
+                    adminId: uid,
                     client: {
                       role: 'CLIENT',
                       events: {

@@ -25,6 +25,7 @@ export default function Chat({ clientId }) {
 
   const [mode, setMode] = useState(isOrganizerUser ? 'clients' : isPlatformAdmin ? 'support' : 'client');
   const [selectedClientId, setSelectedClientId] = useState(clientId || '');
+  const [selectedConversationId, setSelectedConversationId] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [sortBy, setSortBy] = useState('unread');
@@ -33,6 +34,7 @@ export default function Chat({ clientId }) {
     if (typeof window === 'undefined') return;
     const storedMode = window.localStorage.getItem('selectedChatMode');
     const storedClientId = window.localStorage.getItem('selectedChatClientId');
+    const storedConversationId = window.localStorage.getItem('selectedChatConversationId');
 
     if (isPlatformAdmin) {
       setMode('support');
@@ -42,6 +44,9 @@ export default function Chat({ clientId }) {
 
     if (storedClientId) {
       setSelectedClientId(storedClientId);
+    }
+    if (storedConversationId) {
+      setSelectedConversationId(storedConversationId);
     }
   }, [isPlatformAdmin, isOrganizerUser]);
 
@@ -89,9 +94,14 @@ export default function Chat({ clientId }) {
   }, [convs, search, statusFilter, sortBy, activeMode]);
 
   const conv = useMemo(() => {
-    if (isClient) return convs[0];
+    if (selectedConversationId) {
+      const selected = filteredConvs.find((item) => String(item.id) === String(selectedConversationId)) ||
+        convs.find((item) => String(item.id) === String(selectedConversationId));
+      if (selected) return selected;
+    }
+    if (isClient) return filteredConvs[0] || convs[0];
     return filteredConvs.find((item) => String(item.clientId) === String(selectedClientId)) || filteredConvs[0] || convs[0];
-  }, [convs, filteredConvs, selectedClientId, isClient]);
+  }, [convs, filteredConvs, selectedClientId, selectedConversationId, isClient]);
 
   const activeClientId = clientId || conv?.clientId || selectedClientId;
   const templates = templatesData?.templates || [];
@@ -107,7 +117,10 @@ export default function Chat({ clientId }) {
     if (!selectedClientId && filteredConvs[0]?.clientId) {
       setSelectedClientId(filteredConvs[0].clientId);
     }
-  }, [filteredConvs, selectedClientId]);
+    if (!selectedConversationId && filteredConvs[0]?.id) {
+      setSelectedConversationId(filteredConvs[0].id);
+    }
+  }, [filteredConvs, selectedClientId, selectedConversationId]);
 
   useEffect(() => {
     const numericId = Number(conv?.id);
@@ -123,8 +136,10 @@ export default function Chat({ clientId }) {
 
   async function selectConversation(nextClientId, conversationId) {
     setSelectedClientId(nextClientId);
+    setSelectedConversationId(conversationId || '');
     if (typeof window !== 'undefined') {
       window.localStorage.setItem('selectedChatClientId', String(nextClientId));
+      window.localStorage.setItem('selectedChatConversationId', String(conversationId || ''));
       window.localStorage.setItem('selectedChatMode', activeMode);
     }
 
@@ -155,6 +170,7 @@ export default function Chat({ clientId }) {
         }
       : {
           text: finalText,
+          conversationId: isClient ? conv?.id : undefined,
           clientId: !isClient ? activeClientId : undefined,
           attachmentUrl: payload.attachmentUrl ?? attachment.url,
           attachmentName: payload.attachmentName ?? attachment.name,
@@ -217,7 +233,7 @@ export default function Chat({ clientId }) {
 
   return (
     <div className="flex h-full bg-white">
-      {!isClient && (
+      <aside className="w-80 border-r border-slate-200 bg-white overflow-y-auto">
         <aside className="w-80 border-r border-slate-200 bg-white overflow-y-auto">
           <div className="p-4 border-b border-slate-200 space-y-3">
             <div>
@@ -291,7 +307,7 @@ export default function Chat({ clientId }) {
                 <button
                   key={`${activeMode}-${item.id}`}
                   onClick={() => selectConversation(item.clientId, item.id)}
-                  className={`w-full text-left p-4 hover:bg-slate-50 ${String(conv?.clientId) === String(item.clientId) ? 'bg-violet-50' : ''}`}
+                  className={`w-full text-left p-4 hover:bg-slate-50 ${String(conv?.id) === String(item.id) ? 'bg-violet-50' : ''}`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -334,7 +350,6 @@ export default function Chat({ clientId }) {
             {filteredConvs.length === 0 && <p className="p-4 text-sm text-slate-500">Aucune conversation trouvee.</p>}
           </div>
         </aside>
-      )}
 
       <div className="flex flex-col flex-1 min-w-0">
         <div className="p-4 border-b border-slate-200">
