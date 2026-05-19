@@ -7,6 +7,9 @@
   },
   "scripts": {
     "dev": "next dev",
+    "dev:docker": "next dev -H 0.0.0.0 -p 3000",
+    "test:unit": "node --test tests/unit/*.test.cjs",
+    "test:coverage": "node --test --experimental-test-coverage tests/unit/*.test.cjs",
     "build": "prisma generate && next build",
     "vercel-build": "prisma generate && next build",
     "postinstall": "prisma generate",

@@ -37,6 +37,27 @@ npm run dev
 ```
 Ouvre: http://localhost:3000
 
+## Lancer avec Docker
+```bash
+docker compose up --build
+```
+
+Ouvre: http://localhost:3001
+
+Le `docker-compose.yml` lance :
+- l'application Next.js en mode dev avec hot reload ;
+- une base PostgreSQL 16 ;
+- un volume persistant pour les donnees PostgreSQL ;
+- `prisma generate`, `prisma db push` et le seed au demarrage.
+
+Dans ce projet, le frontend et le backend tournent dans le meme service Next.js :
+- frontend : pages et composants React ;
+- backend : routes API Next.js dans `pages/api`.
+
+Comptes de demo Docker :
+- Admin : `admin@easyevent.com` / `admin123`
+- Organisateur : `owner@easyevent.com` / `owner123`
+
 ## Comptes
 - Admin (créé via seed) : `admin@easyevent.com` / `admin123`
 - Client : inscription via l'interface `/auth/signup`

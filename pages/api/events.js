@@ -4,6 +4,7 @@ import { prisma } from '../../lib/prisma';
 import { canAccessEventRecord, canManageOperations, eventScopeForUser } from '../../lib/permissions';
 import { writeAudit } from '../../lib/audit';
 import { notifyOrganizerUsers, notifyUser } from '../../lib/notifications';
+import eventCreationRules from '../../lib/eventCreationRules.cjs';
 import {
   EVENT_STATUS,
   canTransition,
@@ -14,42 +15,7 @@ import {
   writeEventHistory,
 } from '../../lib/events';
 
-function toDate(value) {
-  const d = new Date(value);
-  if (isNaN(d.getTime())) return null;
-  return d;
-}
-
-function toEventDate(body, existing = {}) {
-  if (!body.date) return existing.date;
-  const date = String(body.date).slice(0, 10);
-  const time = body.eventTime ? String(body.eventTime).slice(0, 5) : '00:00';
-  return toDate(`${date}T${time}:00`);
-}
-
-function eventPayload(body, existing = {}) {
-  return {
-    name: body.name != null ? String(body.name) : existing.name,
-    date: toEventDate(body, existing),
-    occasionType: body.occasionType != null ? String(body.occasionType) || null : existing.occasionType,
-    theme: body.theme != null ? String(body.theme) || null : existing.theme,
-    location: body.location != null ? String(body.location) || null : existing.location,
-    guestCount: body.guestCount !== undefined && body.guestCount !== null && body.guestCount !== ''
-      ? Number(body.guestCount)
-      : existing.guestCount ?? null,
-    budget: body.budget !== undefined && body.budget !== null && body.budget !== ''
-      ? Number(body.budget)
-      : existing.budget ?? null,
-    notes: body.notes != null ? String(body.notes) || null : existing.notes,
-    serviceBuffet: body.serviceBuffet !== undefined ? Boolean(body.serviceBuffet) : Boolean(existing.serviceBuffet),
-    serviceDeco: body.serviceDeco !== undefined ? Boolean(body.serviceDeco) : Boolean(existing.serviceDeco),
-    serviceOrganisation: body.serviceOrganisation !== undefined ? Boolean(body.serviceOrganisation) : Boolean(existing.serviceOrganisation),
-    serviceGateaux: body.serviceGateaux !== undefined ? Boolean(body.serviceGateaux) : Boolean(existing.serviceGateaux),
-    serviceMobilier: body.serviceMobilier !== undefined ? Boolean(body.serviceMobilier) : Boolean(existing.serviceMobilier),
-    serviceAnimation: body.serviceAnimation !== undefined ? Boolean(body.serviceAnimation) : Boolean(existing.serviceAnimation),
-    serviceLieu: body.serviceLieu !== undefined ? Boolean(body.serviceLieu) : Boolean(existing.serviceLieu),
-  };
-}
+const { buildEventCreationPayload, validateEventCreationInput } = eventCreationRules;
 
 async function ensureCapacity(date, excludeEventId, organizerId) {
   const count = await countActiveEventsForDay(date, excludeEventId, organizerId);
@@ -176,14 +142,12 @@ export default async function handler(req, res) {
       }
 
       const body = req.body || {};
-      if (!body.name || !body.date || !body.organizerId) {
-        return res.status(400).json({ message: 'name, date and organizerId required' });
+      const validation = validateEventCreationInput(body);
+      if (!validation.ok) {
+        return res.status(400).json({ message: validation.errors.join(', ') });
       }
 
-      const payload = eventPayload(body);
-      if (!payload.date) {
-        return res.status(400).json({ message: 'Invalid date' });
-      }
+      const payload = buildEventCreationPayload(body);
 
       const organizer = await prisma.organizer.findFirst({
         where: { id: Number(body.organizerId), status: 'APPROVED' },
@@ -263,7 +227,7 @@ export default async function handler(req, res) {
         return res.status(403).json({ message: 'Event can no longer be modified' });
       }
 
-      const payload = eventPayload(body, existing);
+      const payload = buildEventCreationPayload(body, existing);
       if (!payload.date) return res.status(400).json({ message: 'Invalid date' });
 
       const organizerId = body.organizerId ? Number(body.organizerId) : existing.organizerId;
