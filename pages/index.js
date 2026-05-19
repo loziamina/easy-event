@@ -90,9 +90,9 @@ export default function Home() {
   return (
     <>
       <Head><title>EasyEvent</title></Head>
-      <div className="app-shell flex h-screen overflow-hidden">
+      <div className="app-shell flex h-screen overflow-x-hidden">
         <Sidebar current={view} onChange={navigateTo} isAuthed={!!session} role={role} />
-        <main className="min-w-0 flex-1 flex flex-col overflow-hidden">
+        <main className="min-h-0 min-w-0 flex-1 flex flex-col overflow-hidden">
           <div className="app-topbar px-4 md:px-8 py-4 flex items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
               <button
@@ -121,7 +121,7 @@ export default function Home() {
             <UserMenu />
           </div>
 
-          <div className="app-main flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-8">
+          <div className="app-main min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-8">
             {view === 'dashboard' && <Dashboard onSelectOrganizer={handleSelectOrganizer} />}
             {view === 'catalogue' && canUseOrganizerWorkspace && <Catalogue />}
             {view === 'events' && role !== 'PLATFORM_ADMIN' && <Events navTarget={navTarget} />}
