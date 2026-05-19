@@ -275,9 +275,13 @@ export default function Mockups({ navTarget }) {
               ))}
             </select>
             <input className="app-input rounded-xl px-4 py-3" placeholder="Titre maquette" value={form.title} onChange={(e) => updateField('title', e.target.value)} required />
-            <input className="app-input rounded-xl px-4 py-3" placeholder="URL image / PDF / Canva" value={form.url} onChange={(e) => updateField('url', e.target.value)} required />
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-slate-700">Photo, video, PDF ou lien Canva</span>
+              <input className="app-input w-full rounded-xl px-4 py-3" placeholder="URL photo / video / PDF / Canva" value={form.url} onChange={(e) => updateField('url', e.target.value)} required />
+            </label>
             <select className="app-select rounded-xl px-4 py-3" value={form.fileType} onChange={(e) => updateField('fileType', e.target.value)}>
               <option value="image">Image</option>
+              <option value="video">Video</option>
               <option value="pdf">PDF</option>
               <option value="canva">Canva</option>
             </select>
