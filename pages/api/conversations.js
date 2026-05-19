@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from './auth/[...nextauth]';
 import { prisma } from '../../lib/prisma';
-import { canManageOperations, isOrganizerStaff, isPlatformAdmin } from '../../lib/permissions';
+import { canManageOperations, isOrganizerOwner, isOrganizerStaff, isPlatformAdmin } from '../../lib/permissions';
 import { writeAudit } from '../../lib/audit';
 
 async function getAdminUser() {
@@ -196,6 +196,7 @@ export default async function handler(req, res) {
   const isStaff = canManageOperations(session.user);
   const platformAdmin = isPlatformAdmin(session.user);
   const staffAssignedOnly = isOrganizerStaff(session.user);
+  const organizerOwner = isOrganizerOwner(session.user);
   const supportMode = req.query.support === 'true' || req.body?.support === true;
   const organizerId = session.user.organizerId ? Number(session.user.organizerId) : null;
 
@@ -275,22 +276,23 @@ export default async function handler(req, res) {
       if (isStaff) {
         const clientId = req.query.clientId ? Number(req.query.clientId) : null;
         const markRead = req.query.markRead !== 'false';
+        const visibleEventScope = staffAssignedOnly
+          ? { organizerId, assignedStaffId: uid }
+          : organizerOwner
+            ? { organizerId, assignedStaffId: null }
+            : { organizerId };
+
         const where = {
           organizerId: organizerId || undefined,
           clientId: clientId || undefined,
           client: {
             role: 'CLIENT',
-            ...(staffAssignedOnly
-              ? {
-                  events: {
-                    some: {
-                      organizerId,
-                      assignedStaffId: uid,
-                      status: { in: ['PENDING_APPROVAL', 'ACCEPTED', 'PLANNED', 'DONE'] },
-                    },
-                  },
-                }
-              : {}),
+            events: {
+              some: {
+                ...visibleEventScope,
+                status: { in: ['PENDING_APPROVAL', 'ACCEPTED', 'PLANNED', 'DONE'] },
+              },
+            },
           },
         };
 
@@ -302,7 +304,7 @@ export default async function handler(req, res) {
                 events: {
                   where: {
                     status: { in: ['PENDING_APPROVAL', 'ACCEPTED', 'PLANNED', 'DONE'] },
-                    ...(staffAssignedOnly ? { organizerId, assignedStaffId: uid } : {}),
+                    ...visibleEventScope,
                   },
                   orderBy: { date: 'desc' },
                   take: 1,
@@ -407,6 +409,19 @@ export default async function handler(req, res) {
             select: { id: true },
           });
           if (!assignedEvent) return res.status(403).json({ message: 'Forbidden' });
+        } else if (organizerOwner) {
+          const unassignedEvent = await prisma.event.findFirst({
+            where: {
+              ownerId: effectiveClientId,
+              organizerId,
+              assignedStaffId: null,
+              status: { in: ['PENDING_APPROVAL', 'ACCEPTED', 'PLANNED', 'DONE'] },
+            },
+            select: { id: true },
+          });
+          if (!unassignedEvent) {
+            return res.status(403).json({ message: 'Conversation already assigned to staff' });
+          }
         }
       }
 
@@ -553,6 +568,11 @@ export default async function handler(req, res) {
           Number(event.organizerId) === organizerId && Number(event.assignedStaffId) === uid
         ));
         if (!hasAssignedEvent) return res.status(403).json({ message: 'Forbidden' });
+      } else if (organizerOwner && kind === 'CLIENT_SERVICE') {
+        const hasUnassignedEvent = conv.client?.events?.some((event) => (
+          Number(event.organizerId) === organizerId && event.assignedStaffId == null
+        ));
+        if (!hasUnassignedEvent) return res.status(403).json({ message: 'Conversation already assigned to staff' });
       }
 
       if (platformAdmin || (isStaff && kind === 'CLIENT_SERVICE')) {

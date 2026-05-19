@@ -1,9 +1,39 @@
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from './auth/[...nextauth]';
 import { prisma } from '../../lib/prisma';
-import { canManageOperations, isPlatformAdmin } from '../../lib/permissions';
+import { canManageOperations, isOrganizerOwner, isOrganizerStaff, isPlatformAdmin } from '../../lib/permissions';
 
-function unreadForConversation(conversation, role) {
+function isTeamConversation(conversation) {
+  return ['ORGANIZER_OWNER', 'ORGANIZER_STAFF'].includes(conversation.client?.role) &&
+    ['ORGANIZER_OWNER', 'ORGANIZER_STAFF'].includes(conversation.admin?.role);
+}
+
+function isSupportConversation(conversation) {
+  return ['ORGANIZER_OWNER', 'ORGANIZER_STAFF'].includes(conversation.client?.role) &&
+    conversation.admin?.role === 'PLATFORM_ADMIN';
+}
+
+function unreadForConversation(conversation, user) {
+  const role = user.role;
+  const uid = Number(user.id);
+
+  if (isTeamConversation(conversation)) {
+    const lastReadAt = conversation.clientId === uid ? conversation.clientLastReadAt : conversation.staffLastReadAt;
+    return (conversation.messages || []).filter((message) => {
+      if (message.authorId === uid) return false;
+      if (!lastReadAt) return true;
+      return message.createdAt > lastReadAt;
+    }).length;
+  }
+
+  if (isSupportConversation(conversation) && role !== 'PLATFORM_ADMIN') {
+    return (conversation.messages || []).filter((message) => {
+      if (message.sender !== 'PLATFORM_ADMIN') return false;
+      if (!conversation.clientLastReadAt) return true;
+      return message.createdAt > conversation.clientLastReadAt;
+    }).length;
+  }
+
   return (conversation.messages || []).filter((message) => {
     if (role === 'PLATFORM_ADMIN') {
       if (message.sender === 'PLATFORM_ADMIN') return false;
@@ -30,16 +60,52 @@ export default async function handler(req, res) {
     const uid = Number(session.user.id);
     const isStaff = canManageOperations(session.user);
     const platformAdmin = isPlatformAdmin(session.user);
+    const organizerStaff = isOrganizerStaff(session.user);
+    const organizerOwner = isOrganizerOwner(session.user);
+    const organizerId = session.user.organizerId ? Number(session.user.organizerId) : null;
 
     if (req.method === 'GET') {
+      const clientServiceEventScope = organizerStaff
+        ? { organizerId, assignedStaffId: uid }
+        : organizerOwner
+          ? { organizerId, assignedStaffId: null }
+          : { organizerId };
+
       const conversations = await prisma.conversation.findMany({
-        where: isStaff
-          ? (platformAdmin ? { client: { role: { in: ['ORGANIZER_OWNER', 'ORGANIZER_STAFF'] } } } : {})
-          : { clientId: uid },
-        include: { messages: true },
+        where: platformAdmin
+          ? { client: { role: { in: ['ORGANIZER_OWNER', 'ORGANIZER_STAFF'] } } }
+          : isStaff
+            ? {
+                OR: [
+                  {
+                    clientId: uid,
+                    admin: { role: 'PLATFORM_ADMIN' },
+                  },
+                  {
+                    organizerId,
+                    OR: [{ clientId: uid }, { adminId: uid }],
+                    client: { role: { in: ['ORGANIZER_OWNER', 'ORGANIZER_STAFF'] } },
+                    admin: { role: { in: ['ORGANIZER_OWNER', 'ORGANIZER_STAFF'] } },
+                  },
+                  {
+                    organizerId,
+                    client: {
+                      role: 'CLIENT',
+                      events: {
+                        some: {
+                          ...clientServiceEventScope,
+                          status: { in: ['PENDING_APPROVAL', 'ACCEPTED', 'PLANNED', 'DONE'] },
+                        },
+                      },
+                    },
+                  },
+                ],
+              }
+            : { clientId: uid },
+        include: { client: { include: { events: true } }, admin: true, messages: true },
       });
 
-      const unreadMessages = conversations.reduce((sum, conv) => sum + unreadForConversation(conv, session.user.role), 0);
+      const unreadMessages = conversations.reduce((sum, conv) => sum + unreadForConversation(conv, session.user), 0);
       const notifications = await prisma.notification.findMany({
         where: {
           isRead: false,

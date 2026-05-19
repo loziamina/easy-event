@@ -109,6 +109,18 @@ export default function Chat({ clientId }) {
     }
   }, [filteredConvs, selectedClientId]);
 
+  useEffect(() => {
+    const numericId = Number(conv?.id);
+    if (!numericId) return;
+
+    const endpoint = activeMode === 'team' ? '/api/team-conversations' : '/api/conversations';
+    fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: numericId }),
+    }).then(() => mutate()).catch(() => {});
+  }, [conv?.id, activeMode, mutate]);
+
   async function selectConversation(nextClientId, conversationId) {
     setSelectedClientId(nextClientId);
     if (typeof window !== 'undefined') {
