@@ -95,7 +95,7 @@ export default function Tickets({ navTarget }) {
     if (ticket?.requester?.id) {
       window.localStorage.setItem('selectedChatClientId', String(ticket.requester.id));
     } else {
-      window.removeItem('selectedChatClientId');
+      window.localStorage.removeItem('selectedChatClientId');
     }
     window.dispatchEvent(new CustomEvent('easy-event:navigate', { detail: { view: 'chat' } }));
     info('Canal support', 'Conversation ouverte pour ce ticket.');

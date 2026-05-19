@@ -104,7 +104,7 @@ export default function StaffManagement() {
   function openPlatformSupport() {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem('selectedChatMode', 'support');
-    window.removeItem('selectedChatClientId');
+    window.localStorage.removeItem('selectedChatClientId');
     window.dispatchEvent(new CustomEvent('easy-event:navigate', { detail: { view: 'chat' } }));
     info('Support plateforme', 'Canal support pret pour ta demande.');
   }

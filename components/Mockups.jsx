@@ -1,6 +1,6 @@
 import useSWR from 'swr';
 import { useSession } from 'next-auth/react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useToast } from './ToastProvider';
 
 const fetcher = (url) => fetch(url).then((res) => res.json());
