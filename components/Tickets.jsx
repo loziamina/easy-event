@@ -32,6 +32,8 @@ export default function Tickets({ navTarget }) {
 
   const [statusFilter, setStatusFilter] = useState('');
   const [form, setForm] = useState({ title: '', description: '' });
+  const [editingId, setEditingId] = useState(null);
+  const [editingForm, setEditingForm] = useState({ title: '', description: '' });
 
   const query = useMemo(() => {
     const params = new URLSearchParams();
@@ -86,6 +88,52 @@ export default function Tickets({ navTarget }) {
       return;
     }
     info('Ticket mis a jour', `Statut passe a ${status}.`);
+    mutate();
+  }
+
+  function startEdit(ticket) {
+    setEditingId(ticket.id);
+    setEditingForm({ title: ticket.title || '', description: ticket.description || '' });
+  }
+
+  async function saveTicket(id) {
+    const title = editingForm.title.trim();
+    const description = editingForm.description.trim();
+    if (!title || !description) {
+      error('Ticket incomplet', 'Ajoute un objet et une description.');
+      return;
+    }
+
+    const res = await fetch('/api/tickets', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, title, description }),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      error('Modification impossible', payload.message || 'Le ticket n a pas pu etre modifie.');
+      return;
+    }
+
+    setEditingId(null);
+    setEditingForm({ title: '', description: '' });
+    success('Ticket modifie', 'La demande a ete mise a jour.');
+    mutate();
+  }
+
+  async function deleteTicket(id) {
+    const res = await fetch('/api/tickets', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({}));
+      error('Suppression impossible', payload.message || 'Le ticket n a pas pu etre supprime.');
+      return;
+    }
+
+    info('Ticket supprime', 'La demande ouverte a ete retiree.');
     mutate();
   }
 
@@ -166,12 +214,27 @@ export default function Tickets({ navTarget }) {
           >
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
               <div className="space-y-3">
-                <div className="flex flex-wrap items-center gap-3">
-                  <h3 className="text-xl font-bold">{ticket.title}</h3>
-                  <span className={`px-2 py-1 rounded-full border text-xs font-semibold ${statusBadge(ticket.status)}`}>
-                    {ticket.status}
-                  </span>
-                </div>
+                {editingId === ticket.id ? (
+                  <div className="space-y-3">
+                    <input
+                      className="w-full p-3 border rounded-lg"
+                      value={editingForm.title}
+                      onChange={(e) => setEditingForm((current) => ({ ...current, title: e.target.value }))}
+                    />
+                    <textarea
+                      className="w-full min-h-[120px] p-3 border rounded-lg"
+                      value={editingForm.description}
+                      onChange={(e) => setEditingForm((current) => ({ ...current, description: e.target.value }))}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h3 className="text-xl font-bold">{ticket.title}</h3>
+                    <span className={`px-2 py-1 rounded-full border text-xs font-semibold ${statusBadge(ticket.status)}`}>
+                      {ticket.status}
+                    </span>
+                  </div>
+                )}
 
                 <dl className="grid md:grid-cols-2 gap-3 text-sm">
                   {isPlatformAdmin ? (
@@ -201,13 +264,52 @@ export default function Tickets({ navTarget }) {
                   </div>
                 </dl>
 
-                <div className="text-sm">
-                  <p className="font-semibold text-gray-700 mb-1">Description</p>
-                  <p className="text-gray-600 whitespace-pre-wrap">{ticket.description}</p>
-                </div>
+                {editingId !== ticket.id ? (
+                  <div className="text-sm">
+                    <p className="font-semibold text-gray-700 mb-1">Description</p>
+                    <p className="text-gray-600 whitespace-pre-wrap">{ticket.description}</p>
+                  </div>
+                ) : null}
               </div>
 
               <div className="flex flex-col gap-2 min-w-[200px]">
+                {!isPlatformAdmin && ticket.status === 'OPEN' ? (
+                  editingId === ticket.id ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => saveTicket(ticket.id)}
+                        className="px-4 py-2 rounded-lg bg-violet-600 text-white font-semibold hover:bg-violet-700"
+                      >
+                        Enregistrer
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingId(null)}
+                        className="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200"
+                      >
+                        Annuler
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => startEdit(ticket)}
+                        className="px-4 py-2 rounded-lg bg-slate-100 text-slate-800 font-semibold hover:bg-slate-200"
+                      >
+                        Modifier
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteTicket(ticket.id)}
+                        className="px-4 py-2 rounded-lg bg-rose-100 text-rose-800 font-semibold hover:bg-rose-200"
+                      >
+                        Supprimer
+                      </button>
+                    </>
+                  )
+                ) : null}
                 {(isPlatformAdmin ? ticket.status === 'IN_PROGRESS' : ticket.status === 'IN_PROGRESS') ? (
                   <button
                     onClick={() => openSupportConversation(ticket)}

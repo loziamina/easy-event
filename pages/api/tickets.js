@@ -139,6 +139,43 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'PATCH') {
+      if (organizerOwner && !platformAdmin) {
+        const ticketId = Number(req.body?.id);
+        const title = String(req.body?.title || '').trim();
+        const description = String(req.body?.description || '').trim();
+        if (!ticketId || !title || !description) {
+          return res.status(400).json({ message: 'Valid id, title and description required' });
+        }
+
+        const existing = await prisma.ticket.findFirst({
+          where: { id: ticketId, organizerId },
+        });
+        if (!existing) return res.status(404).json({ message: 'Ticket not found' });
+        if (existing.status !== 'OPEN') {
+          return res.status(403).json({ message: 'Only open tickets can be edited' });
+        }
+
+        const ticket = await prisma.ticket.update({
+          where: { id: ticketId },
+          data: { title, description },
+          include: {
+            organizer: true,
+            requester: true,
+            assignedAdmin: true,
+          },
+        });
+
+        await writeAudit({
+          actorId: uid,
+          action: 'TICKET_UPDATED',
+          entity: 'Ticket',
+          entityId: ticket.id,
+          details: { organizerId, title: ticket.title },
+        });
+
+        return res.status(200).json({ ticket: mapTicket(ticket) });
+      }
+
       if (!platformAdmin) {
         return res.status(403).json({ message: 'Only platform admin can update tickets' });
       }
@@ -185,7 +222,36 @@ export default async function handler(req, res) {
       return res.status(200).json({ ticket: mapTicket(ticket) });
     }
 
-    res.setHeader('Allow', ['GET', 'POST', 'PATCH']);
+    if (req.method === 'DELETE') {
+      if (!organizerOwner || !organizerId) {
+        return res.status(403).json({ message: 'Only organizer owners can delete tickets' });
+      }
+
+      const ticketId = Number(req.body?.id);
+      if (!ticketId) return res.status(400).json({ message: 'id required' });
+
+      const existing = await prisma.ticket.findFirst({
+        where: { id: ticketId, organizerId },
+      });
+      if (!existing) return res.status(404).json({ message: 'Ticket not found' });
+      if (existing.status !== 'OPEN') {
+        return res.status(403).json({ message: 'Only open tickets can be deleted' });
+      }
+
+      await prisma.ticket.delete({ where: { id: ticketId } });
+
+      await writeAudit({
+        actorId: uid,
+        action: 'TICKET_DELETED',
+        entity: 'Ticket',
+        entityId: ticketId,
+        details: { organizerId, title: existing.title },
+      });
+
+      return res.status(204).end();
+    }
+
+    res.setHeader('Allow', ['GET', 'POST', 'PATCH', 'DELETE']);
     return res.status(405).end('Method not allowed');
   } catch (error) {
     console.error('API /tickets error:', error);
