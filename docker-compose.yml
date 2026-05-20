@@ -5,11 +5,11 @@ services:
       target: dev
     command: sh -c "npx prisma generate && npx prisma db push && npm run seed && npm run dev:docker"
     ports:
-      - "3001:3000"
+      - "3000:3000"
     environment:
       DATABASE_URL: postgresql://easyevent:easyevent@db:5432/easyevent?schema=public
       DIRECT_URL: postgresql://easyevent:easyevent@db:5432/easyevent?schema=public
-      NEXTAUTH_URL: http://localhost:3001
+      NEXTAUTH_URL: http://localhost:3000
       NEXTAUTH_SECRET: CHANGE_ME_PLEASE_CHANGE_IN_PROD
       ADMIN_EMAIL: admin@easyevent.com
       ADMIN_PASSWORD: admin123

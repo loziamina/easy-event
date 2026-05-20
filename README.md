@@ -1,76 +1,178 @@
-# EasyEvent (Next.js + Prisma + NextAuth)
-Aujourd’hui, les organisateurs d’événements gèrent leurs échanges avec les clients de manière dispersée à travers plusieurs outils comme WhatsApp, Excel ou les appels téléphoniques, ce qui rend le suivi des demandes, des devis, des plannings et des validations complexe et peu structuré. Ce projet vise à créer une plateforme web centralisée permettant aux organisateurs de gérer l’ensemble de leur activité depuis un seul espace : gestion des événements, catalogue de services, communication avec les clients, création de devis, partage de maquettes et planification opérationnelle. L’objectif est de simplifier le processus de réservation, améliorer l’expérience client et professionnaliser la gestion des événements grâce à des outils digitaux adaptés aux besoins réels du terrain.
+# EasyEvent
 
-## Prérequis
-- Node.js 18+ (ou 20+)
+EasyEvent est une plateforme web pour centraliser la gestion d'evenements entre clients, organisateurs, staff et administrateurs.
+
+Le projet remplace les echanges disperses entre WhatsApp, Excel, appels et fichiers par un espace unique pour :
+
+- creer et suivre des demandes d'evenement ;
+- gerer un catalogue de prestations ;
+- construire et envoyer des devis ;
+- centraliser les conversations ;
+- suivre les statuts, maquettes, tickets et notifications ;
+- tracer les actions importantes via audit et historique.
+
+Stack principale :
+
+- Next.js 14
+- React 18
+- Prisma 5
+- PostgreSQL 16
+- NextAuth
+- Docker / Docker Compose
+
+## Kickoff Pack
+
+Le cadrage projet est documente dans le dossier :
+
+- Local : `docs/00-kickoff-pack/`
+- GitHub : https://github.com/loziamina/easy-event/tree/main/docs/00-kickoff-pack
+
+Schema du Kickoff Pack :
+
+```text
+docs/00-kickoff-pack/
+|-- 01-project-brief.md
+|-- 02-product-scope.md
+|-- 03-domain-model.md
+|-- 04-database.md
+|-- 05-architecture.md
+|-- 06-adr/
+|   |-- ADR-001-choix-bdd.md
+|   |-- ADR-002-framework-backend.md
+|   `-- ADR-003-strategie-auth.md
+|-- 07-tech-debt-register.md
+`-- 08-definition-of-done.md
+```
+
+Avant de modifier le code, lire en priorite :
+
+1. `02-product-scope.md` pour le perimetre MVP.
+2. `03-domain-model.md` pour les roles, regles metier et machines a etats.
+3. `04-database.md` pour le modele de donnees et les dettes BDD.
+4. `05-architecture.md` pour les responsabilites par couche.
+5. `07-tech-debt-register.md` pour les dettes acceptees et les risques.
+
+## Prerequis
+
+- Node.js 20.x recommande
 - npm
+- Docker Desktop, optionnel mais recommande pour lancer PostgreSQL localement
 
-## Installation
+## Installation locale
+
 ```bash
 npm install
 ```
 
-## Configuration
-1) Copie `.env.example` -> `.env`
-2) Mets un secret :
+Copier le fichier d'environnement :
+
 ```bash
-# Windows PowerShell
-# (ou remplace manuellement)
+copy .env.example .env
 ```
 
-Exemple `.env` :
-- `DATABASE_URL="file:./dev.db"`
-- `NEXTAUTH_URL="http://localhost:3000"`
-- `NEXTAUTH_SECRET="CHANGE_ME_PLEASE"`
-- `ADMIN_EMAIL="admin@easyevent.com"`
-- `ADMIN_PASSWORD="admin123"`
+Adapter ensuite les variables dans `.env`.
 
-## Base de données (Prisma)
-```bash
-npx prisma migrate dev --name init
-npm run seed
-```
+Exemple PostgreSQL local :
 
-## Lancer le projet
-```bash
-npm run dev
+```env
+DATABASE_URL="postgresql://easyevent:easyevent@localhost:5432/easyevent?schema=public"
+DIRECT_URL="postgresql://easyevent:easyevent@localhost:5432/easyevent?schema=public"
+NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_SECRET="replace-with-a-long-random-secret"
+ADMIN_EMAIL="admin@easyevent.com"
+ADMIN_PASSWORD="admin123"
+DEMO_ORGANIZER_EMAIL="owner@easyevent.com"
+DEMO_ORGANIZER_PASSWORD="owner123"
 ```
-Ouvre: http://localhost:3000
 
 ## Lancer avec Docker
+
 ```bash
 docker compose up --build
 ```
 
-Ouvre: http://localhost:3001
+Ouvrir ensuite :
+
+```text
+http://localhost:3001
+```
 
 Le `docker-compose.yml` lance :
+
 - l'application Next.js en mode dev avec hot reload ;
 - une base PostgreSQL 16 ;
 - un volume persistant pour les donnees PostgreSQL ;
 - `prisma generate`, `prisma db push` et le seed au demarrage.
 
-Dans ce projet, le frontend et le backend tournent dans le meme service Next.js :
-- frontend : pages et composants React ;
-- backend : routes API Next.js dans `pages/api`.
-
 Comptes de demo Docker :
+
 - Admin : `admin@easyevent.com` / `admin123`
 - Organisateur : `owner@easyevent.com` / `owner123`
+- Client : inscription via `/auth/signup`
 
-## Comptes
-- Admin (créé via seed) : `admin@easyevent.com` / `admin123`
-- Client : inscription via l'interface `/auth/signup`
+## Lancer sans Docker
 
-## Fonctionnalités
-- Auth (client / admin) : NextAuth Credentials + bcrypt
-- Events CRUD (client) : créer / modifier / supprimer tant que PENDING_APPROVAL
-- Validation admin : accepter / refuser
-- Chat client <-> admin : messages persistés en DB (Prisma) via `/api/conversations`
-- Catalogue : admin ajoute des produits, clients consultent
+Verifier que PostgreSQL est disponible et que `DATABASE_URL` pointe vers la bonne base, puis :
 
-## Structure
-- `pages/` : routes + API
-- `components/` : UI (Dashboard, Catalogue, Events, Chat, Sidebar)
-- `prisma/` : schema + seed
-- `lib/` : prisma + auth helpers
+```bash
+npm run prisma:generate
+npx prisma db push
+npm run seed
+npm run dev
+```
+
+Ouvrir ensuite :
+
+```text
+http://localhost:3000
+```
+
+## Scripts utiles
+
+```bash
+npm run dev
+npm run dev:docker
+npm run build
+npm run start
+npm run test:unit
+npm run test:coverage
+npm run prisma:generate
+npm run prisma:migrate
+npm run prisma:studio
+npm run seed
+```
+
+## Structure du projet
+
+```text
+components/       UI React reutilisable
+docs/             documentation projet et kickoff pack
+lib/              services metier, auth, permissions, Prisma
+pages/            pages Next.js et routes API
+prisma/           schema Prisma et seed
+public/           assets publics et uploads locaux
+styles/           styles globaux
+tests/            tests unitaires
+```
+
+Dans cette architecture :
+
+- le frontend vit dans `pages/` et `components/` ;
+- l'API vit dans `pages/api/` ;
+- les regles metier vivent dans `lib/*` ;
+- l'acces BDD passe par Prisma ;
+- les choix structurants sont traces dans `docs/00-kickoff-pack/06-adr/`.
+
+## Points de vigilance
+
+Les dettes connues sont documentees dans `docs/00-kickoff-pack/07-tech-debt-register.md`.
+
+Avant production, traiter en priorite :
+
+- bcrypt cost 12 ;
+- rate limiting sur auth/reset/upload ;
+- IDs publics opaques ;
+- soft delete sur entites critiques ;
+- logs structures et correlation ID ;
+- nettoyage RGPD ;
+- CI bloquante.
