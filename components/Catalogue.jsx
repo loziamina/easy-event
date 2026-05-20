@@ -126,7 +126,13 @@ function ProductCard({ product, isStaff, onEdit, onDelete, onAddToEvent }) {
         </div>
 
         {product.description ? <p className="mt-3 text-sm leading-6 text-slate-600">{product.description}</p> : null}
-        <p className="mt-3 text-lg font-semibold text-indigo-700">{product.price}</p>
+        {isStaff ? (
+          <p className="mt-3 text-lg font-semibold text-indigo-700">{product.price}</p>
+        ) : (
+          <p className="mt-3 text-sm font-medium text-slate-500">
+            Prix communique par l'organisateur dans le devis.
+          </p>
+        )}
 
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
           <span className={`rounded-full px-3 py-1 font-semibold ${product.isAvailable ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
@@ -174,7 +180,7 @@ function ProductCard({ product, isStaff, onEdit, onDelete, onAddToEvent }) {
               disabled={!product.isAvailable}
               className="app-button-primary w-full rounded-xl py-2 font-semibold disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Ajouter a mon evenement
+              Ajouter a ma selection
             </button>
           )}
         </div>
@@ -203,6 +209,49 @@ function StaffCatalogueSection({
   onEditProduct,
   onDeleteProduct,
 }) {
+  const { success, error } = useToast();
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  async function uploadProductImage(file) {
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      error('Upload impossible', 'Selectionne une image valide.');
+      return;
+    }
+
+    setUploadingImage(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const res = await fetch('/api/uploads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            dataUrl: reader.result,
+            category: 'portfolio-image',
+            filename: file.name,
+          }),
+        });
+
+        const payload = await res.json().catch(() => ({}));
+        if (res.ok && payload.url) {
+          updateProduct('image', payload.url);
+          success('Image ajoutee', "L'image principale de l'offre est prete.");
+        } else {
+          error('Upload impossible', payload.message || "L'image n'a pas pu etre importee.");
+        }
+      } finally {
+        setUploadingImage(false);
+      }
+    };
+    reader.onerror = () => {
+      setUploadingImage(false);
+      error('Upload impossible', "L'image n'a pas pu etre lue.");
+    };
+    reader.readAsDataURL(file);
+  }
+
   return (
     <section className="space-y-6">
       <div className="page-section p-6 md:p-7">
@@ -265,7 +314,16 @@ function StaffCatalogueSection({
               <option value="PRODUCT">Produit / service</option>
               <option value="PACK">Pack</option>
             </select>
-            <input className="app-input rounded-xl px-4 py-3" placeholder="Image principale URL" value={productForm.image} onChange={(e) => updateProduct('image', e.target.value)} />
+            <div className="space-y-2">
+              <input className="app-input w-full rounded-xl px-4 py-3" placeholder="Image principale URL" value={productForm.image} onChange={(e) => updateProduct('image', e.target.value)} />
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="block w-full text-sm text-slate-600"
+                onChange={(e) => uploadProductImage(e.target.files?.[0])}
+              />
+              {uploadingImage ? <p className="text-sm text-slate-500">Upload image en cours...</p> : null}
+            </div>
             <input className="app-input rounded-xl px-4 py-3" placeholder="Stock simple" type="number" min="0" value={productForm.stock} onChange={(e) => updateProduct('stock', e.target.value)} />
             <input className="app-input rounded-xl px-4 py-3 md:col-span-2" placeholder="Galerie URLs separees par virgules" value={productForm.galleryText} onChange={(e) => updateProduct('galleryText', e.target.value)} />
             <input className="app-input rounded-xl px-4 py-3 md:col-span-2" placeholder="Options/variantes: rouge, bleu, 10 personnes, XL..." value={productForm.variantsText} onChange={(e) => updateProduct('variantsText', e.target.value)} />
