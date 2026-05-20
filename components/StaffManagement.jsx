@@ -28,6 +28,8 @@ export default function StaffManagement() {
   const [users, setUsers] = useState([]);
   const [form, setForm] = useState(initialForm);
   const [message, setMessage] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', address: '' });
 
   useEffect(() => {
     setForm(initialForm);
@@ -78,6 +80,37 @@ export default function StaffManagement() {
     if (res.ok) {
       info('Role mis a jour', 'Le role du membre a ete modifie.');
       loadStaff();
+    }
+  }
+
+  function startEditing(user) {
+    setEditingId(user.id);
+    setEditForm({
+      name: user.name || '',
+      email: user.email || '',
+      phone: user.phone || '',
+      address: user.address || '',
+    });
+  }
+
+  function updateEditField(field, value) {
+    setEditForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function saveStaffDetails(id) {
+    const res = await fetch('/api/admin/staff', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, ...editForm }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      setEditingId(null);
+      success('Coordonnees mises a jour', 'Les informations du membre ont ete modifiees.');
+      loadStaff();
+    } else {
+      error('Mise a jour impossible', data.message || 'Erreur mise a jour coordonnees');
     }
   }
 
@@ -153,6 +186,8 @@ export default function StaffManagement() {
             <tr>
               <th className="p-3">Nom</th>
               <th className="p-3">Email</th>
+              <th className="p-3">Telephone</th>
+              <th className="p-3">Adresse</th>
               <th className="p-3">Role</th>
               <th className="p-3 text-right">Actions</th>
             </tr>
@@ -160,8 +195,54 @@ export default function StaffManagement() {
           <tbody>
             {users.map((user) => (
               <tr key={user.id} className="border-t">
-                <td className="p-3">{user.name || '-'}</td>
-                <td className="p-3">{user.email}</td>
+                <td className="p-3">
+                  {editingId === user.id ? (
+                    <input
+                      className="w-full p-2 border rounded-lg"
+                      value={editForm.name}
+                      onChange={(e) => updateEditField('name', e.target.value)}
+                      placeholder="Nom"
+                    />
+                  ) : (
+                    user.name || '-'
+                  )}
+                </td>
+                <td className="p-3">
+                  {editingId === user.id ? (
+                    <input
+                      className="w-full p-2 border rounded-lg"
+                      value={editForm.email}
+                      onChange={(e) => updateEditField('email', e.target.value)}
+                      placeholder="Email"
+                    />
+                  ) : (
+                    user.email
+                  )}
+                </td>
+                <td className="p-3">
+                  {editingId === user.id ? (
+                    <input
+                      className="w-full p-2 border rounded-lg"
+                      value={editForm.phone}
+                      onChange={(e) => updateEditField('phone', e.target.value)}
+                      placeholder="Telephone"
+                    />
+                  ) : (
+                    user.phone || '-'
+                  )}
+                </td>
+                <td className="p-3">
+                  {editingId === user.id ? (
+                    <input
+                      className="w-full p-2 border rounded-lg"
+                      value={editForm.address}
+                      onChange={(e) => updateEditField('address', e.target.value)}
+                      placeholder="Adresse"
+                    />
+                  ) : (
+                    user.address || '-'
+                  )}
+                </td>
                 <td className="p-3">
                   <select className="p-2 border rounded-lg" value={user.role} onChange={(e) => updateRole(user.id, e.target.value)}>
                     {(isPlatformAdmin ? ['ORGANIZER_STAFF', 'ORGANIZER_OWNER', 'PLATFORM_ADMIN'] : ['ORGANIZER_STAFF']).map((value) => (
@@ -171,6 +252,20 @@ export default function StaffManagement() {
                 </td>
                 <td className="p-3">
                   <div className="flex items-center justify-end gap-3">
+                    {editingId === user.id ? (
+                      <>
+                        <button className="text-green-700 font-semibold" onClick={() => saveStaffDetails(user.id)}>
+                          Enregistrer
+                        </button>
+                        <button className="text-gray-600 font-semibold" onClick={() => setEditingId(null)}>
+                          Annuler
+                        </button>
+                      </>
+                    ) : (
+                      <button className="text-violet-700 font-semibold" onClick={() => startEditing(user)}>
+                        Modifier
+                      </button>
+                    )}
                     {isOrganizerUser ? (
                       <button className="text-slate-700 font-semibold" onClick={() => openTeamConversation(user)}>
                         Communiquer
@@ -185,7 +280,7 @@ export default function StaffManagement() {
             ))}
             {users.length === 0 && (
               <tr>
-                <td className="p-4 text-gray-500" colSpan={4}>Aucun membre.</td>
+                <td className="p-4 text-gray-500" colSpan={6}>Aucun membre.</td>
               </tr>
             )}
           </tbody>

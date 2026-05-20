@@ -103,8 +103,9 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'PATCH') {
-      const { id, role, name, phone, address } = req.body || {};
+      const { id, role, email, name, phone, address } = req.body || {};
       const userId = Number(id);
+      const normalizedEmail = email != null ? String(email).trim().toLowerCase() : undefined;
 
       if (!userId) {
         return res.status(400).json({ message: 'id required' });
@@ -128,10 +129,20 @@ export default async function handler(req, res) {
       if (!platformAdmin && role && role !== 'ORGANIZER_STAFF') {
         return res.status(403).json({ message: 'Only platform admin can set this role' });
       }
+      if (normalizedEmail === '') {
+        return res.status(400).json({ message: 'email cannot be empty' });
+      }
+      if (normalizedEmail && normalizedEmail !== existing.email) {
+        const emailOwner = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+        if (emailOwner && emailOwner.id !== userId) {
+          return res.status(409).json({ message: 'Email already used' });
+        }
+      }
 
       const user = await prisma.user.update({
         where: { id: userId },
         data: {
+          email: normalizedEmail || undefined,
           role: role || undefined,
           name: name != null ? String(name).trim() || null : undefined,
           phone: phone != null ? String(phone).trim() || null : undefined,
@@ -144,7 +155,10 @@ export default async function handler(req, res) {
         action: 'STAFF_UPDATED',
         entity: 'User',
         entityId: user.id,
-        details: { role: user.role },
+        details: {
+          role: user.role,
+          emailChanged: Boolean(normalizedEmail && normalizedEmail !== existing.email),
+        },
       });
 
       return res.status(200).json({ user: safeUser(user) });

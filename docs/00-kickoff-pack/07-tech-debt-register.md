@@ -27,6 +27,7 @@ Le principe de cadrage :
 | 11 | Pas de pipeline CI bloquant | Le projet reste en phase cadrage/MVP local | 1 jour | Ajouter GitHub Actions : install, Prisma generate, tests unitaires, build |
 | 12 | `CONTRIBUTING.md` absent | Les conventions sont encore implicites | 0.5 a 1 jour | Creer le document avant l'arrivee d'un second dev actif |
 | 13 | Emails et workers asynchrones non formalises | Pas necessaire pour demo MVP | 2 a 4 jours | Introduire une file de jobs si les emails deviennent critiques |
+| 14 | Verification de legitimite organisateur manuelle | Le MVP se limite a un statut admin `PENDING` / `APPROVED` / `SUSPENDED` | 2 a 5 jours | Ajouter checklist admin, justificatif, score de confiance et liens de recherche assistes en V1.1 |
 
 ## 3. Dettes refusees
 
@@ -95,3 +96,51 @@ YAGNI ne s'applique pas aux fondations :
 - Toute dette nouvelle doit avoir : raison, cout estime, echeance de remboursement.
 - Toute dette securite critique passe avant les features.
 - Une dette non remboursee depuis deux releases doit etre requalifiee : acceptee, refusee ou transformee en ticket priorise.
+
+## 9. Evolution reservee : verification organisateur
+
+Objectif : eviter qu'un organisateur puisse recevoir des demandes client sans preuve minimale de legitimite.
+
+Strategie recommandee : verification hybride, pas 100 % automatique.
+
+Statuts possibles a ajouter :
+
+- `verificationStatus = UNVERIFIED`
+- `verificationStatus = NEEDS_DOCUMENT`
+- `verificationStatus = VERIFIED`
+- `verificationStatus = REJECTED`
+
+Separation conseillee :
+
+- `Organizer.status` dit si l'organisateur peut recevoir des evenements : `PENDING`, `APPROVED`, `SUSPENDED`.
+- `Organizer.verificationStatus` dit si son existence est verifiee.
+
+MVP ameliore :
+
+- garder l'organisateur en `PENDING` apres inscription ;
+- demander nom, ville, telephone, adresse, zone d'intervention, description ;
+- permettre l'ajout d'un justificatif : registre commerce, ICE, auto-entrepreneur, portfolio, lien Instagram, site web ou Google Maps ;
+- afficher une checklist admin avant approbation ;
+- proposer des liens de recherche assistes au lieu de scraper Google directement.
+
+Exemples de controles automatiques simples :
+
+- telephone present et format valide ;
+- ville et zone d'intervention renseignees ;
+- description assez complete ;
+- lien externe ou justificatif fourni ;
+- portfolio/images presents ;
+- email non jetable si possible.
+
+Principe de score :
+
+- score eleve : probablement valide ;
+- score moyen : revue manuelle ;
+- score faible : justificatif requis.
+
+Raison de ne pas scraper Google au MVP :
+
+- resultats incomplets ou faux positifs ;
+- petits organisateurs parfois absents de Google ;
+- risque de blocage et dependance fragile ;
+- meilleure approche : liens de recherche assistes pour l'admin, puis API officielle type Google Places ou registre entreprise en V2.

@@ -31,6 +31,7 @@ Principes RBAC :
 - RM-10 : chaque changement de statut important d'un evenement doit etre trace dans l'historique.
 - RM-11 : chaque action importante qui concerne un utilisateur doit creer une notification et, pour les actions critiques, envoyer un email.
 - RM-12 : lorsqu'un evenement est assigne a un membre du staff, ce membre doit recevoir un email d'assignation.
+- RM-12bis : un responsable organisateur peut modifier les coordonnees des membres de son staff rattaches a la meme organisation, y compris l'email de connexion si celui-ci reste unique.
 - RM-13 : un devis est toujours rattache a un evenement existant.
 - RM-14 : un devis en brouillon peut etre modifie par l'organisateur.
 - RM-15 : un devis envoye au client ne doit pas etre modifie silencieusement ; toute modification doit creer une nouvelle version ou repasser par une action explicite.
