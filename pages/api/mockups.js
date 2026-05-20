@@ -108,7 +108,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'PATCH') {
-      const { id, action, text } = req.body || {};
+      const { id, action, text, title, url, fileType, description, moodboard } = req.body || {};
       const mockupId = Number(id);
       if (!mockupId || !action) return res.status(400).json({ message: 'id and action required' });
 
@@ -118,6 +118,38 @@ export default async function handler(req, res) {
       });
       if (!mockup) return res.status(404).json({ message: 'Mockup not found' });
       if (!canAccessEventRecord(session.user, mockup.event)) return res.status(403).json({ message: 'Forbidden' });
+
+      if (action === 'update') {
+        if (!isStaff) return res.status(403).json({ message: 'Forbidden' });
+        if (!title || !url) return res.status(400).json({ message: 'title and url required' });
+
+        const updated = await prisma.mockup.update({
+          where: { id: mockupId },
+          data: {
+            title: String(title),
+            url: String(url),
+            fileType: fileType || 'image',
+            description: description ? String(description) : null,
+            moodboard: parseList(moodboard).join(','),
+            status: 'PENDING',
+            decidedAt: null,
+          },
+          include: {
+            event: { include: { owner: { select: { id: true, name: true, email: true } } } },
+            comments: { orderBy: { createdAt: 'asc' } },
+          },
+        });
+
+        await writeEventHistory({
+          eventId: mockup.eventId,
+          actorId: uid,
+          action: 'MOCKUP_UPDATED',
+          details: { mockupId },
+        });
+        await writeAudit({ actorId: uid, action: 'MOCKUP_UPDATED', entity: 'Mockup', entityId: mockupId });
+
+        return res.status(200).json(mapMockup(updated));
+      }
 
       if (action === 'comment') {
         if (!text) return res.status(400).json({ message: 'text required' });

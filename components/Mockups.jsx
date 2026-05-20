@@ -66,14 +66,41 @@ function CommentBlock({ item }) {
   );
 }
 
-function MockupCard({ mockup, isStaff, onAction, onDelete }) {
+function MockupCard({ mockup, isStaff, onAction, onDelete, onEdit }) {
   const [comment, setComment] = useState('');
+  const [viewer, setViewer] = useState(null);
+  const mediaItems = [
+    mockup.url ? { url: mockup.url, type: mockup.fileType || 'image', label: mockup.title } : null,
+    ...(mockup.moodboard || []).map((url, index) => ({
+      url,
+      type: isVideo(url, '') ? 'video' : isVisual(url, '') ? 'image' : 'link',
+      label: `Moodboard ${index + 1}`,
+    })),
+  ].filter(Boolean);
+  const activeMedia = viewer != null ? mediaItems[viewer] : null;
 
   async function submitComment(e) {
     e.preventDefault();
     if (!comment.trim()) return;
     await onAction(mockup.id, 'comment', comment);
     setComment('');
+  }
+
+  function openViewer(index) {
+    const item = mediaItems[index];
+    if (!item) return;
+    if (item.type !== 'image' && item.type !== 'video') {
+      window.open(item.url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    setViewer(index);
+  }
+
+  function moveViewer(direction) {
+    setViewer((current) => {
+      if (current == null || mediaItems.length === 0) return current;
+      return (current + direction + mediaItems.length) % mediaItems.length;
+    });
   }
 
   return (
@@ -101,9 +128,13 @@ function MockupCard({ mockup, isStaff, onAction, onDelete }) {
       <div className="p-6 space-y-6">
         <div className="rounded-[1.4rem] border border-slate-200 bg-white p-4">
           {isVisual(mockup.url, mockup.fileType) ? (
-            <img src={mockup.url} alt={mockup.title} className="max-h-[460px] w-full rounded-[1.2rem] border border-slate-200 object-contain bg-slate-50" />
+            <button type="button" onClick={() => openViewer(0)} className="block w-full focus:outline-none focus:ring-4 focus:ring-indigo-100">
+              <img src={mockup.url} alt={mockup.title} className="max-h-[460px] w-full rounded-[1.2rem] border border-slate-200 object-contain bg-slate-50" />
+            </button>
           ) : isVideo(mockup.url, mockup.fileType) ? (
-            <video src={mockup.url} controls className="max-h-[460px] w-full rounded-[1.2rem] border border-slate-200 bg-slate-950" />
+            <button type="button" onClick={() => openViewer(0)} className="block w-full focus:outline-none focus:ring-4 focus:ring-indigo-100">
+              <video src={mockup.url} controls className="max-h-[460px] w-full rounded-[1.2rem] border border-slate-200 bg-slate-950" />
+            </button>
           ) : (
             <a href={mockup.url} target="_blank" rel="noreferrer" className="block rounded-[1.2rem] border border-indigo-100 bg-indigo-50 p-6 font-semibold text-indigo-700">
               Ouvrir la maquette PDF / Canva / fichier
@@ -115,8 +146,23 @@ function MockupCard({ mockup, isStaff, onAction, onDelete }) {
           <div>
             <h4 className="text-lg font-bold text-slate-900">Moodboard inspiration deco</h4>
             <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-              {mockup.moodboard.map((src) => (
-                <img key={src} src={src} alt="" className="h-28 w-full rounded-xl border border-slate-200 bg-slate-50 object-cover" />
+              {mockup.moodboard.map((src, index) => (
+                <button
+                  key={src}
+                  type="button"
+                  onClick={() => openViewer(index + 1)}
+                  className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 text-left focus:outline-none focus:ring-4 focus:ring-indigo-100"
+                >
+                  {isVideo(src, '') ? (
+                    <video src={src} className="h-28 w-full object-cover bg-slate-950" />
+                  ) : isVisual(src, '') ? (
+                    <img src={src} alt="" className="h-28 w-full object-cover" />
+                  ) : (
+                    <span className="flex h-28 items-center justify-center p-3 text-center text-sm font-semibold text-indigo-700">
+                      Ouvrir le fichier
+                    </span>
+                  )}
+                </button>
               ))}
             </div>
           </div>
@@ -162,14 +208,69 @@ function MockupCard({ mockup, isStaff, onAction, onDelete }) {
                 </>
               ) : null}
               {isStaff ? (
-                <button onClick={() => onDelete(mockup.id)} className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 font-semibold text-rose-700 hover:bg-rose-100">
-                  Supprimer
-                </button>
+                <>
+                  <button onClick={() => onEdit(mockup)} className="app-button-secondary rounded-xl px-4 py-3 font-semibold">
+                    Modifier
+                  </button>
+                  <button onClick={() => onDelete(mockup.id)} className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 font-semibold text-rose-700 hover:bg-rose-100">
+                    Supprimer
+                  </button>
+                </>
               ) : null}
             </div>
           </div>
         </div>
       </div>
+
+      {activeMedia ? (
+        <div className="fixed inset-0 z-[9999] bg-slate-950/90 p-4 md:p-8">
+          <div className="mx-auto flex h-full max-w-6xl flex-col">
+            <div className="mb-4 flex items-center justify-between gap-3 text-white">
+              <div>
+                <p className="text-sm uppercase tracking-[0.08em] text-white/60">{activeMedia.label}</p>
+                <p className="text-lg font-semibold">{viewer + 1} / {mediaItems.length}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewer(null)}
+                className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold hover:bg-white/20"
+              >
+                Fermer
+              </button>
+            </div>
+
+            <div className="grid min-h-0 flex-1 grid-cols-[auto_1fr_auto] items-center gap-3">
+              <button
+                type="button"
+                onClick={() => moveViewer(-1)}
+                className="h-12 w-12 rounded-full border border-white/20 bg-white/10 text-2xl font-bold text-white hover:bg-white/20 disabled:opacity-30"
+                disabled={mediaItems.length < 2}
+                aria-label="Media precedent"
+              >
+                &lt;
+              </button>
+
+              <div className="flex min-h-0 items-center justify-center">
+                {activeMedia.type === 'video' ? (
+                  <video src={activeMedia.url} controls autoPlay className="max-h-[78vh] max-w-full rounded-2xl bg-black" />
+                ) : (
+                  <img src={activeMedia.url} alt={activeMedia.label} className="max-h-[78vh] max-w-full rounded-2xl object-contain" />
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => moveViewer(1)}
+                className="h-12 w-12 rounded-full border border-white/20 bg-white/10 text-2xl font-bold text-white hover:bg-white/20 disabled:opacity-30"
+                disabled={mediaItems.length < 2}
+                aria-label="Media suivant"
+              >
+                &gt;
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -189,6 +290,7 @@ export default function Mockups({ navTarget }) {
   const changesCount = mockups.filter((item) => item.status === 'CHANGES_REQUESTED').length;
 
   const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const { success, error, info } = useToast();
 
@@ -211,8 +313,7 @@ export default function Mockups({ navTarget }) {
     });
   }
 
-  async function uploadMediaFile(file) {
-    if (!file) return;
+  async function uploadOneMediaFile(file) {
     const isVideoFile = file.type.startsWith('video/');
     const isImageFile = file.type.startsWith('image/');
 
@@ -230,30 +331,49 @@ export default function Mockups({ navTarget }) {
       return;
     }
 
+    const dataUrl = await fileToDataUrl(file);
+    const res = await fetch('/api/uploads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dataUrl,
+        filename: file.name,
+        category: isVideoFile ? 'portfolio-video' : 'portfolio-image',
+      }),
+    });
+
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(payload.message || payload.error || 'Upload impossible');
+    }
+
+    return {
+      url: payload.url,
+      fileType: isVideoFile ? 'video' : 'image',
+    };
+  }
+
+  async function uploadMediaFiles(files) {
+    const selectedFiles = Array.from(files || []);
+    if (selectedFiles.length === 0) return;
+
     setUploadingMedia(true);
     try {
-      const dataUrl = await fileToDataUrl(file);
-      const res = await fetch('/api/uploads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          dataUrl,
-          filename: file.name,
-          category: isVideoFile ? 'portfolio-video' : 'portfolio-image',
-        }),
-      });
-
-      const payload = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(payload.message || payload.error || 'Upload impossible');
+      const uploaded = [];
+      for (const file of selectedFiles) {
+        uploaded.push(await uploadOneMediaFile(file));
       }
 
       setForm((current) => ({
         ...current,
-        url: payload.url,
-        fileType: isVideoFile ? 'video' : 'image',
+        url: current.url || uploaded[0]?.url || '',
+        fileType: current.url ? current.fileType : uploaded[0]?.fileType || current.fileType,
+        moodboardText: [
+          ...parseMoodboardText(current.moodboardText),
+          ...uploaded.map((item) => item.url).filter(Boolean),
+        ].join(', '),
       }));
-      success(isVideoFile ? 'Video uploadee' : 'Photo uploadee');
+      success('Fichiers uploades', `${uploaded.length} fichier(s) ajoute(s) a la maquette.`);
     } catch (uploadError) {
       error('Upload impossible', uploadError.message);
     } finally {
@@ -261,22 +381,49 @@ export default function Mockups({ navTarget }) {
     }
   }
 
+  function parseMoodboardText(value) {
+    return String(value || '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  function startEditing(mockup) {
+    setEditingId(mockup.id);
+    setForm({
+      eventId: String(mockup.eventId || ''),
+      title: mockup.title || '',
+      url: mockup.url || '',
+      fileType: mockup.fileType || 'image',
+      description: mockup.description || '',
+      moodboardText: (mockup.moodboard || []).join(', '),
+    });
+  }
+
+  function cancelEditing() {
+    setEditingId(null);
+    setForm(emptyForm);
+  }
+
   async function uploadMockup(e) {
     e.preventDefault();
     const res = await fetch('/api/mockups', {
-      method: 'POST',
+      method: editingId ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        id: editingId,
+        action: editingId ? 'update' : undefined,
         ...form,
         moodboard: form.moodboardText,
       }),
     });
     if (res.ok) {
+      setEditingId(null);
       setForm(emptyForm);
       mutate();
-      success('Maquette ajoutee');
+      success(editingId ? 'Maquette modifiee' : 'Maquette ajoutee');
     } else {
-      error('Ajout impossible', await res.text());
+      error(editingId ? 'Modification impossible' : 'Ajout impossible', await res.text());
     }
   }
 
@@ -330,7 +477,7 @@ export default function Mockups({ navTarget }) {
       {isStaff ? (
         <form onSubmit={uploadMockup} className="surface-card rounded-[1.6rem] p-6 space-y-4">
           <div>
-            <h3 className="text-xl font-bold text-slate-900">Ajouter une maquette</h3>
+            <h3 className="text-xl font-bold text-slate-900">{editingId ? 'Modifier la maquette' : 'Ajouter une maquette'}</h3>
             <p className="mt-1 text-sm text-slate-500">Publie une nouvelle version, un PDF ou un lien Canva avec ses inspirations.</p>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
@@ -349,11 +496,12 @@ export default function Mockups({ navTarget }) {
                   {uploadingMedia ? 'Upload...' : 'Uploader'}
                   <input
                     type="file"
+                    multiple
                     accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
                     className="sr-only"
                     disabled={uploadingMedia}
                     onChange={(e) => {
-                      uploadMediaFile(e.target.files?.[0]);
+                      uploadMediaFiles(e.target.files);
                       e.target.value = '';
                     }}
                   />
@@ -369,7 +517,16 @@ export default function Mockups({ navTarget }) {
             <input className="app-input rounded-xl px-4 py-3 md:col-span-2" placeholder="Moodboard URLs separees par virgules" value={form.moodboardText} onChange={(e) => updateField('moodboardText', e.target.value)} />
             <textarea className="app-textarea min-h-[110px] rounded-xl px-4 py-3 md:col-span-2" placeholder="Description / modifications apportees" value={form.description} onChange={(e) => updateField('description', e.target.value)} />
           </div>
-          <button className="app-button-primary rounded-xl px-5 py-3 font-semibold">Ajouter version</button>
+          <div className="flex flex-wrap gap-3">
+            <button className="app-button-primary rounded-xl px-5 py-3 font-semibold">
+              {editingId ? 'Enregistrer la maquette' : 'Ajouter version'}
+            </button>
+            {editingId ? (
+              <button type="button" onClick={cancelEditing} className="app-button-secondary rounded-xl px-5 py-3 font-semibold">
+                Annuler
+              </button>
+            ) : null}
+          </div>
         </form>
       ) : null}
 
@@ -385,6 +542,7 @@ export default function Mockups({ navTarget }) {
               isStaff={isStaff}
               onAction={mockupAction}
               onDelete={deleteMockup}
+              onEdit={startEditing}
             />
           </div>
         ))}
