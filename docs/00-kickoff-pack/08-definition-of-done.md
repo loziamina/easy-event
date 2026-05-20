@@ -133,5 +133,5 @@ Conditions restantes avant validation complete :
 - nettoyage README ;
 - arbitrage des dettes securite et BDD a rembourser avant la prochaine phase.
 
-Signe : ___________  
+Signe : Amina LOZI  
 Date : 2026-05-20
