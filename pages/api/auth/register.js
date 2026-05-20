@@ -45,7 +45,7 @@ export default async function handler(req, res) {
 
   // block registering as admin via UI
   const normalizedEmail = String(email).trim().toLowerCase();
-  if (normalizedEmail === (process.env.ADMIN_EMAIL || 'admin@easyevent.com').toLowerCase()) {
+  if (process.env.ADMIN_EMAIL && normalizedEmail === process.env.ADMIN_EMAIL.toLowerCase()) {
     return res.status(403).json({ message: 'This email is reserved.' });
   }
 

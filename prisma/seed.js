@@ -3,6 +3,14 @@ const bcrypt = require('bcryptjs');
 
 const prisma = new PrismaClient();
 
+function requiredEnv(name) {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return value;
+}
+
 function slugify(value) {
   return value
     .toLowerCase()
@@ -13,10 +21,10 @@ function slugify(value) {
 }
 
 async function main() {
-  const adminEmail = process.env.ADMIN_EMAIL || 'admin@easyevent.com';
-  const adminPasswordPlain = process.env.ADMIN_PASSWORD || 'admin123';
+  const adminEmail = requiredEnv('ADMIN_EMAIL');
+  const adminPasswordPlain = requiredEnv('ADMIN_PASSWORD');
 
-  const adminPassword = await bcrypt.hash(adminPasswordPlain, 10);
+  const adminPassword = await bcrypt.hash(adminPasswordPlain, 12);
 
   await prisma.user.upsert({
     where: { email: adminEmail },
@@ -50,8 +58,8 @@ async function main() {
     },
   });
 
-  const ownerEmail = process.env.DEMO_ORGANIZER_EMAIL || 'owner@easyevent.com';
-  const ownerPassword = await bcrypt.hash(process.env.DEMO_ORGANIZER_PASSWORD || 'owner123', 10);
+  const ownerEmail = requiredEnv('DEMO_ORGANIZER_EMAIL');
+  const ownerPassword = await bcrypt.hash(requiredEnv('DEMO_ORGANIZER_PASSWORD'), 12);
 
   await prisma.user.upsert({
     where: { email: ownerEmail },

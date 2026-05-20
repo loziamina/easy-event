@@ -1,10 +1,13 @@
-FROM node:20-alpine AS deps
+FROM node:20-alpine AS base
+RUN apk add --no-cache openssl libc6-compat
+
+FROM base AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
 RUN npm ci
 
-FROM node:20-alpine AS dev
+FROM base AS dev
 WORKDIR /app
 ENV NODE_ENV=development
 COPY --from=deps /app/node_modules ./node_modules
@@ -12,7 +15,7 @@ COPY . .
 EXPOSE 3000
 CMD ["npm", "run", "dev"]
 
-FROM node:20-alpine AS builder
+FROM base AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
@@ -20,7 +23,7 @@ COPY . .
 RUN npx prisma generate
 RUN npm run build
 
-FROM node:20-alpine AS runner
+FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1

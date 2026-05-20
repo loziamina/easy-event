@@ -90,7 +90,7 @@ Note : `04-database.md` documente les champs cibles et les dettes actuelles. Le 
 - [x] Tous les livrables disponibles dans `docs/00-kickoff-pack/`.
 - [x] Dossier `06-adr/` compile avec 3 ADR.
 - [ ] `CONTRIBUTING.md` cree.
-- [ ] README nettoye et aligne avec l'etat Docker/PostgreSQL.
+- [x] README nettoye et aligne avec l'etat Docker/PostgreSQL.
 - [ ] Relu par un pair, mentor ou referent technique.
 - [ ] Valide par le decideur projet.
 

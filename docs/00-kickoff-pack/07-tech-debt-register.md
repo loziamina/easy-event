@@ -26,8 +26,7 @@ Le principe de cadrage :
 | 10 | Logs non structures | Console suffisante en developpement | 1 a 2 jours | Ajouter Pino, niveaux de logs et correlation ID par requete |
 | 11 | Pas de pipeline CI bloquant | Le projet reste en phase cadrage/MVP local | 1 jour | Ajouter GitHub Actions : install, Prisma generate, tests unitaires, build |
 | 12 | `CONTRIBUTING.md` absent | Les conventions sont encore implicites | 0.5 a 1 jour | Creer le document avant l'arrivee d'un second dev actif |
-| 13 | README avec caracteres mal encodes | N'affecte pas l'execution applicative | 0.5 jour | Nettoyer l'encodage et aligner les commandes avec Docker/PostgreSQL |
-| 14 | Emails et workers asynchrones non formalises | Pas necessaire pour demo MVP | 2 a 4 jours | Introduire une file de jobs si les emails deviennent critiques |
+| 13 | Emails et workers asynchrones non formalises | Pas necessaire pour demo MVP | 2 a 4 jours | Introduire une file de jobs si les emails deviennent critiques |
 
 ## 3. Dettes refusees
 
@@ -44,7 +43,7 @@ Ces raccourcis ne doivent pas etre acceptes, meme au MVP :
 
 | Document | Statut | Role |
 |---|---|---|
-| `README.md` | Present, a nettoyer | Lancer le projet, comprendre le contexte et les comptes demo |
+| `README.md` | Present, nettoye | Lancer le projet, comprendre le contexte et les comptes demo |
 | `docs/00-kickoff-pack/04-database.md` | Present | Comprendre le modele de donnees, les index et les dettes BDD |
 | `docs/00-kickoff-pack/06-adr/` | Present | Comprendre les choix structurants : BDD, framework, auth |
 | `CONTRIBUTING.md` | Absent | Documenter branches, commits, conventions, tests et revue |

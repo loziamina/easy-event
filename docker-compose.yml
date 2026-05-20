@@ -4,17 +4,12 @@ services:
       context: .
       target: dev
     command: sh -c "npx prisma generate && npx prisma db push && npm run seed && npm run dev:docker"
+    env_file:
+      - .env.docker
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: postgresql://easyevent:easyevent@db:5432/easyevent?schema=public
-      DIRECT_URL: postgresql://easyevent:easyevent@db:5432/easyevent?schema=public
       NEXTAUTH_URL: http://localhost:3000
-      NEXTAUTH_SECRET: CHANGE_ME_PLEASE_CHANGE_IN_PROD
-      ADMIN_EMAIL: admin@easyevent.com
-      ADMIN_PASSWORD: admin123
-      DEMO_ORGANIZER_EMAIL: owner@easyevent.com
-      DEMO_ORGANIZER_PASSWORD: owner123
       WATCHPACK_POLLING: "true"
     volumes:
       - .:/app
@@ -26,16 +21,14 @@ services:
 
   db:
     image: postgres:16-alpine
+    env_file:
+      - .env.docker
     ports:
       - "5432:5432"
-    environment:
-      POSTGRES_DB: easyevent
-      POSTGRES_USER: easyevent
-      POSTGRES_PASSWORD: easyevent
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U easyevent -d easyevent"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 10

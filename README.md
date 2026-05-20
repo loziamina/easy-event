@@ -75,17 +75,25 @@ Adapter ensuite les variables dans `.env`.
 Exemple PostgreSQL local :
 
 ```env
-DATABASE_URL="postgresql://easyevent:easyevent@localhost:5432/easyevent?schema=public"
-DIRECT_URL="postgresql://easyevent:easyevent@localhost:5432/easyevent?schema=public"
+DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/DATABASE?schema=public"
+DIRECT_URL="postgresql://USER:PASSWORD@localhost:5432/DATABASE?schema=public"
 NEXTAUTH_URL="http://localhost:3000"
 NEXTAUTH_SECRET="replace-with-a-long-random-secret"
-ADMIN_EMAIL="admin@easyevent.com"
-ADMIN_PASSWORD="admin123"
-DEMO_ORGANIZER_EMAIL="owner@easyevent.com"
-DEMO_ORGANIZER_PASSWORD="owner123"
+ADMIN_EMAIL="admin@example.com"
+ADMIN_PASSWORD="replace-with-admin-password"
+DEMO_ORGANIZER_EMAIL="owner@example.com"
+DEMO_ORGANIZER_PASSWORD="replace-with-demo-owner-password"
 ```
 
 ## Lancer avec Docker
+
+Creer le fichier d'environnement Docker local :
+
+```bash
+copy .env.docker.example .env.docker
+```
+
+Puis remplacer les placeholders dans `.env.docker`.
 
 ```bash
 docker compose up --build
@@ -94,7 +102,7 @@ docker compose up --build
 Ouvrir ensuite :
 
 ```text
-http://localhost:3001
+http://localhost:3000
 ```
 
 Le `docker-compose.yml` lance :
@@ -104,11 +112,11 @@ Le `docker-compose.yml` lance :
 - un volume persistant pour les donnees PostgreSQL ;
 - `prisma generate`, `prisma db push` et le seed au demarrage.
 
-Comptes de demo Docker :
+Les comptes de demo Docker sont ceux que tu renseignes dans `.env.docker` :
 
-- Admin : `admin@easyevent.com` / `admin123`
-- Organisateur : `owner@easyevent.com` / `owner123`
-- Client : inscription via `/auth/signup`
+- admin : `ADMIN_EMAIL` / `ADMIN_PASSWORD`
+- organisateur : `DEMO_ORGANIZER_EMAIL` / `DEMO_ORGANIZER_PASSWORD`
+- client : inscription via `/auth/signup`
 
 ## Lancer sans Docker
 
