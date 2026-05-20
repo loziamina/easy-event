@@ -17,6 +17,7 @@ const emptyQuoteForm = {
   eventId: '',
   templateId: '',
   calculationMode: 'MIXED',
+  customItems: [],
   deliveryFee: '0',
   installationFee: '0',
   discount: '0',
@@ -25,6 +26,16 @@ const emptyQuoteForm = {
   terms: '',
   send: true,
 };
+
+const serviceLineDefinitions = [
+  ['serviceBuffet', 'Buffet traditionnel', 'Buffet / repas pour les invites', 'PER_GUEST'],
+  ['serviceDeco', 'Decoration de salle', 'Decoration selon le theme demande', 'FIXED'],
+  ['serviceOrganisation', 'Coordination jour J', 'Organisation et coordination operationnelle', 'FIXED'],
+  ['serviceGateaux', 'Gateau personnalise', 'Gateau adapte au theme de l evenement', 'FIXED'],
+  ['serviceMobilier', 'Mobilier et art de table', 'Mobilier, tables, chaises ou elements decoratifs', 'FIXED'],
+  ['serviceAnimation', 'Animation', 'Animation ou ambiance selon la demande client', 'FIXED'],
+  ['serviceLieu', 'Location / coordination du lieu', 'Gestion du lieu ou coordination avec la salle', 'FIXED'],
+];
 
 function money(value) {
   return Number(value || 0).toLocaleString('fr-FR', {
@@ -419,6 +430,38 @@ export default function Quotes({ navTarget }) {
     setQuoteForm((current) => ({ ...current, [field]: value }));
   }
 
+  function serviceLinesForEvent(eventId) {
+    const event = events.find((item) => String(item.id) === String(eventId));
+    if (!event) return [];
+
+    return serviceLineDefinitions
+      .filter(([field]) => event[field])
+      .map(([, label, description, strategy]) => ({
+        label,
+        description,
+        strategy,
+        quantity: strategy === 'PER_GUEST' ? String(event.guestCount || 1) : '1',
+        unitPrice: '',
+      }));
+  }
+
+  function updateQuoteEvent(eventId) {
+    setQuoteForm((current) => ({
+      ...current,
+      eventId,
+      customItems: serviceLinesForEvent(eventId),
+    }));
+  }
+
+  function updateCustomItem(index, field, value) {
+    setQuoteForm((current) => ({
+      ...current,
+      customItems: current.customItems.map((item, itemIndex) => (
+        itemIndex === index ? { ...item, [field]: value } : item
+      )),
+    }));
+  }
+
   async function saveTemplate(e) {
     e.preventDefault();
     const res = await fetch('/api/quote-templates', {
@@ -550,9 +593,9 @@ export default function Quotes({ navTarget }) {
           <form onSubmit={createQuote} className="surface-card rounded-[1.6rem] p-6 space-y-4">
             <div>
               <h3 className="text-xl font-bold text-slate-900">Generer un devis</h3>
-              <p className="mt-1 text-sm text-slate-500">Pars d’un evenement valide et compose un devis facile a comprendre pour le client.</p>
+              <p className="mt-1 text-sm text-slate-500">Pars d'un evenement valide et compose un devis facile a comprendre pour le client.</p>
             </div>
-            <select className="app-select w-full rounded-xl px-4 py-3" value={quoteForm.eventId} onChange={(e) => updateQuote('eventId', e.target.value)} required>
+            <select className="app-select w-full rounded-xl px-4 py-3" value={quoteForm.eventId} onChange={(e) => updateQuoteEvent(e.target.value)} required>
               <option value="">Evenement</option>
               {events.map((event) => (
                 <option key={event.id} value={event.id}>{event.name} - {event.owner?.name || event.owner?.email}</option>
@@ -569,6 +612,58 @@ export default function Quotes({ navTarget }) {
               <option value="PER_GUEST">Par invite</option>
               <option value="PACKAGE">Forfait</option>
             </select>
+
+            <div className="rounded-[1.2rem] border border-slate-200 bg-slate-50 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-slate-900">Services demandes par le client</p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Les services ci-dessous viennent des cases cochees lors de la creation de l'evenement. Renseigne un prix pour chaque service a chiffrer.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {quoteForm.customItems.map((item, index) => (
+                  <div key={`${item.label}-${index}`} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-[1fr_110px_150px] md:items-center">
+                    <div>
+                      <p className="font-semibold text-slate-900">{item.label}</p>
+                      <p className="mt-1 text-sm text-slate-500">{item.description}</p>
+                    </div>
+                    <label className="text-sm font-medium text-slate-700">
+                      Quantite
+                      <input
+                        className="app-input mt-1 w-full rounded-xl px-3 py-2"
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={item.quantity}
+                        onChange={(e) => updateCustomItem(index, 'quantity', e.target.value)}
+                      />
+                    </label>
+                    <label className="text-sm font-medium text-slate-700">
+                      Prix unitaire
+                      <input
+                        className="app-input mt-1 w-full rounded-xl px-3 py-2"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0"
+                        value={item.unitPrice}
+                        onChange={(e) => updateCustomItem(index, 'unitPrice', e.target.value)}
+                      />
+                    </label>
+                  </div>
+                ))}
+
+                {quoteForm.customItems.length === 0 ? (
+                  <p className="rounded-xl border border-dashed border-slate-200 bg-white p-3 text-sm text-slate-500">
+                    Selectionne un evenement avec des services coches pour les afficher ici.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+
             <div className="grid gap-3 md:grid-cols-3">
               <input className="app-input rounded-xl px-4 py-3" type="number" min="0" step="0.01" placeholder="Frais de livraison" value={quoteForm.deliveryFee} onChange={(e) => updateQuote('deliveryFee', e.target.value)} />
               <input className="app-input rounded-xl px-4 py-3" type="number" min="0" step="0.01" placeholder="Frais d'installation" value={quoteForm.installationFee} onChange={(e) => updateQuote('installationFee', e.target.value)} />

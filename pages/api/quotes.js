@@ -7,6 +7,7 @@ import { writeEventHistory } from '../../lib/events';
 import { notifyOrganizerUsers } from '../../lib/notifications';
 import {
   QUOTE_STATUS,
+  buildCustomQuoteLines,
   buildQuoteLinesFromEvent,
   quoteNumber,
   summarizeQuoteLines,
@@ -80,6 +81,7 @@ export default async function handler(req, res) {
         depositAmount,
         depositRequired,
         terms,
+        customItems,
         send,
       } = req.body || {};
 
@@ -101,7 +103,10 @@ export default async function handler(req, res) {
         : null;
 
       const mode = calculationMode || template?.calculationMode || 'MIXED';
-      const lines = buildQuoteLinesFromEvent(event, mode);
+      const lines = [
+        ...buildQuoteLinesFromEvent(event, mode),
+        ...buildCustomQuoteLines(customItems),
+      ];
       const summary = summarizeQuoteLines(lines, { deliveryFee, installationFee, discount });
       const status = send ? QUOTE_STATUS.SENT : QUOTE_STATUS.DRAFT;
 

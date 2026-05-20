@@ -39,6 +39,18 @@ function scoreOrganizer(organizer, searchTerm, userAddress) {
   return score;
 }
 
+function organizerMatchesSearch(organizer, searchTerm) {
+  if (!searchTerm) return true;
+
+  return [
+    organizer.city,
+    organizer.serviceArea,
+    organizer.name,
+    organizer.description,
+    organizer.address,
+  ].some((value) => normalize(value).includes(searchTerm));
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', ['GET']);
@@ -87,8 +99,7 @@ export default async function handler(req, res) {
       proximityScore: scoreOrganizer(organizer, search, userAddress),
     }))
     .filter((organizer) => {
-      if (!search) return true;
-      return organizer.proximityScore > 0;
+      return organizerMatchesSearch(organizer, search);
     })
     .sort((a, b) => b.proximityScore - a.proximityScore || a.name.localeCompare(b.name, 'fr'));
 

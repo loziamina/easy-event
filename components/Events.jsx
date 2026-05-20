@@ -241,7 +241,49 @@ function ServiceBadges({ event }) {
 function EventAttachments({ event, onChanged }) {
   const { error, success } = useToast();
   const [form, setForm] = useState({ name: '', url: '', type: '' });
+  const [uploading, setUploading] = useState(false);
   const attachments = event.attachments || [];
+
+  async function uploadAttachment(file) {
+    if (!file) return;
+
+    const reader = new FileReader();
+    setUploading(true);
+    reader.onload = async () => {
+      try {
+        const isVideo = file.type.startsWith('video/');
+        const res = await fetch('/api/uploads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            dataUrl: reader.result,
+            category: isVideo ? 'portfolio-video' : 'portfolio-image',
+            filename: file.name,
+          }),
+        });
+
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok || !payload.url) {
+          error('Upload impossible', payload.message || "Le fichier n'a pas pu etre importe.");
+          return;
+        }
+
+        setForm((current) => ({
+          name: current.name || file.name,
+          url: payload.url,
+          type: current.type || file.type || 'fichier',
+        }));
+        success('Fichier importe', 'Tu peux maintenant l ajouter aux pieces jointes.');
+      } finally {
+        setUploading(false);
+      }
+    };
+    reader.onerror = () => {
+      setUploading(false);
+      error('Upload impossible', "Le fichier n'a pas pu etre lu.");
+    };
+    reader.readAsDataURL(file);
+  }
 
   async function addAttachment(e) {
     e.preventDefault();
@@ -279,6 +321,15 @@ function EventAttachments({ event, onChanged }) {
         <input className="app-input rounded-xl px-3 py-2 text-sm" placeholder="URL photo ou plan" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
         <input className="app-input rounded-xl px-3 py-2 text-sm" placeholder="Type" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} />
         <button className="app-button-primary rounded-xl px-3 py-2 text-sm font-semibold">Ajouter</button>
+        <div className="md:col-span-4">
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
+            className="block w-full text-sm text-slate-600"
+            onChange={(e) => uploadAttachment(e.target.files?.[0])}
+          />
+          {uploading ? <p className="mt-2 text-sm text-slate-500">Upload en cours...</p> : null}
+        </div>
       </form>
       <div className="mt-3 flex flex-wrap gap-2">
         {attachments.map((attachment) => (
