@@ -3,7 +3,7 @@ import useSWR from 'swr';
 
 const fetcher = (url) => fetch(url).then((res) => res.json());
 
-function MediaGrid({ items, label }) {
+function MediaGrid({ items, label, onOpen }) {
   if (!items?.length) return null;
 
   return (
@@ -11,13 +11,19 @@ function MediaGrid({ items, label }) {
       <h4 className="text-sm font-semibold text-slate-700">{label}</h4>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {items.map((url, index) => (
-          <div key={`${label}-${index}`} className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+          <button
+            key={`${label}-${index}`}
+            type="button"
+            onClick={() => onOpen?.(label, index)}
+            className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 text-left transition hover:-translate-y-1 hover:shadow-md focus:outline-none focus:ring-4 focus:ring-indigo-100"
+            aria-label={`Afficher ${label.toLowerCase()} ${index + 1}`}
+          >
             {label === 'Videos' ? (
               <video src={url} controls className="h-56 w-full object-cover bg-black" />
             ) : (
               <img src={url} alt={`${label} ${index + 1}`} className="h-56 w-full object-cover" />
             )}
-          </div>
+          </button>
         ))}
       </div>
     </div>
@@ -45,6 +51,7 @@ function Stars({ value }) {
 export default function OrganizerDirectory({ onSelectOrganizer }) {
   const [search, setSearch] = useState('');
   const [selectedOrganizer, setSelectedOrganizer] = useState(null);
+  const [mediaViewer, setMediaViewer] = useState(null);
 
   const query = useMemo(() => {
     const params = new URLSearchParams();
@@ -54,6 +61,28 @@ export default function OrganizerDirectory({ onSelectOrganizer }) {
 
   const { data, isLoading } = useSWR(query, fetcher);
   const organizers = data?.organizers || [];
+  const activeMediaItems = mediaViewer?.type === 'Videos'
+    ? selectedOrganizer?.portfolioVideos || []
+    : selectedOrganizer?.portfolioImages || [];
+  const activeMediaUrl = activeMediaItems[mediaViewer?.index || 0];
+
+  function openMedia(type, index) {
+    setMediaViewer({ type, index });
+  }
+
+  function moveMedia(direction) {
+    setMediaViewer((current) => {
+      if (!current) return current;
+      const items = current.type === 'Videos'
+        ? selectedOrganizer?.portfolioVideos || []
+        : selectedOrganizer?.portfolioImages || [];
+      if (!items.length) return current;
+      return {
+        ...current,
+        index: (current.index + direction + items.length) % items.length,
+      };
+    });
+  }
 
   return (
     <section className="space-y-6">
@@ -82,21 +111,30 @@ export default function OrganizerDirectory({ onSelectOrganizer }) {
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         {organizers.map((organizer) => (
-          <button
+          <article
             key={organizer.id}
-            type="button"
-            onClick={() => setSelectedOrganizer(organizer)}
             className="group overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white/92 p-5 text-left shadow-sm transition hover:-translate-y-1 hover:border-indigo-200 hover:shadow-lg"
           >
             {organizer.coverImage ? (
-              <div className="mb-4 overflow-hidden rounded-[1.4rem] border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setSelectedOrganizer(organizer)}
+                className="mb-4 block w-full overflow-hidden rounded-[1.4rem] border border-slate-200 text-left focus:outline-none focus:ring-4 focus:ring-indigo-100"
+                aria-label={`Afficher le profil de ${organizer.name}`}
+              >
                 <img src={organizer.coverImage} alt={organizer.name} className="h-56 w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
-              </div>
+              </button>
             ) : null}
 
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-xl font-bold text-slate-900">{organizer.name}</h3>
+                <button
+                  type="button"
+                  onClick={() => setSelectedOrganizer(organizer)}
+                  className="text-left text-xl font-bold text-slate-900 hover:text-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-100"
+                >
+                  {organizer.name}
+                </button>
                 <p className="text-sm text-slate-500">
                   {organizer.city || 'Ville non renseignee'}
                   {organizer.serviceArea ? ` - ${organizer.serviceArea}` : ''}
@@ -136,12 +174,28 @@ export default function OrganizerDirectory({ onSelectOrganizer }) {
             </dl>
 
             <div className="mt-5 rounded-[1.2rem] border border-indigo-100 bg-gradient-to-r from-indigo-50 via-violet-50 to-white p-4">
-              <p className="text-sm font-semibold text-indigo-900">Voir la prestation et reserver</p>
+              <p className="text-sm font-semibold text-indigo-900">Profil organisateur</p>
               <p className="mt-1 text-sm text-indigo-800">
-                Ouvre la fiche de <span className="font-semibold">{organizer.name}</span> pour consulter ses realisations.
+                Consulte les photos, videos, avis et informations de <span className="font-semibold">{organizer.name}</span>.
               </p>
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => setSelectedOrganizer(organizer)}
+                  className="app-button-primary rounded-2xl px-4 py-3 text-sm font-semibold"
+                >
+                  Afficher le profil
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onSelectOrganizer?.(organizer)}
+                  className="app-button-secondary rounded-2xl px-4 py-3 text-sm font-semibold"
+                >
+                  Reserver
+                </button>
+              </div>
             </div>
-          </button>
+          </article>
         ))}
       </div>
 
@@ -187,8 +241,8 @@ export default function OrganizerDirectory({ onSelectOrganizer }) {
                     <p className="text-slate-600 mt-2 whitespace-pre-wrap">{selectedOrganizer.description || 'Presentation a venir.'}</p>
                   </div>
 
-                  <MediaGrid items={selectedOrganizer.portfolioImages} label="Photos" />
-                  <MediaGrid items={selectedOrganizer.portfolioVideos} label="Videos" />
+                  <MediaGrid items={selectedOrganizer.portfolioImages} label="Photos" onOpen={openMedia} />
+                  <MediaGrid items={selectedOrganizer.portfolioVideos} label="Videos" onOpen={openMedia} />
 
                   <div>
                     <div className="flex items-center justify-between gap-3">
@@ -305,6 +359,58 @@ export default function OrganizerDirectory({ onSelectOrganizer }) {
           </div>
         </div>
       )}
+
+      {mediaViewer && activeMediaUrl ? (
+        <div className="fixed inset-0 z-[9999] bg-slate-950/90 p-4 md:p-8">
+          <div className="mx-auto flex h-full max-w-6xl flex-col">
+            <div className="mb-4 flex items-center justify-between gap-3 text-white">
+              <div>
+                <p className="text-sm uppercase tracking-[0.08em] text-white/60">{mediaViewer.type}</p>
+                <p className="text-lg font-semibold">
+                  {mediaViewer.index + 1} / {activeMediaItems.length}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMediaViewer(null)}
+                className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold hover:bg-white/20"
+              >
+                Fermer
+              </button>
+            </div>
+
+            <div className="grid min-h-0 flex-1 grid-cols-[auto_1fr_auto] items-center gap-3">
+              <button
+                type="button"
+                onClick={() => moveMedia(-1)}
+                className="h-12 w-12 rounded-full border border-white/20 bg-white/10 text-2xl font-bold text-white hover:bg-white/20 disabled:opacity-30"
+                disabled={activeMediaItems.length < 2}
+                aria-label="Media precedent"
+              >
+                &lt;
+              </button>
+
+              <div className="flex min-h-0 items-center justify-center">
+                {mediaViewer.type === 'Videos' ? (
+                  <video src={activeMediaUrl} controls autoPlay className="max-h-[78vh] max-w-full rounded-2xl bg-black" />
+                ) : (
+                  <img src={activeMediaUrl} alt={`${mediaViewer.type} ${mediaViewer.index + 1}`} className="max-h-[78vh] max-w-full rounded-2xl object-contain" />
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => moveMedia(1)}
+                className="h-12 w-12 rounded-full border border-white/20 bg-white/10 text-2xl font-bold text-white hover:bg-white/20 disabled:opacity-30"
+                disabled={activeMediaItems.length < 2}
+                aria-label="Media suivant"
+              >
+                &gt;
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
